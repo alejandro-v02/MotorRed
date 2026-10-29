@@ -1,0 +1,10 @@
+export { VentaEntity } from './venta.entity.js';
+export { LineaVentaEntity } from './linea-venta.entity.js';
+export { CobroEntity } from './cobro.entity.js';
+export { EventoPasarelaEntity } from './evento-pasarela.entity.js';
+export { DispersionEntity } from './dispersion.entity.js';
+export { AsientoEntity } from './asiento.entity.js';
+export { ParametroTributarioEntity } from './parametro-tributario.entity.js';
+export { ClaveIdempotenciaEntity } from './clave-idempotencia.entity.js';
+export { FragmentoConocimientoEntity } from './fragmento-conocimiento.entity.js';
+export { DecisionRiesgoEntity } from './decision-riesgo.entity.js';

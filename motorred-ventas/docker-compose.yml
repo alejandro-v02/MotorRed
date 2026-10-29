@@ -1,0 +1,52 @@
+# Compose del servicio de Ventas (grupo Zaidy) con su propia base de datos (Trabajo 7, Paso 2).
+# Los demás servicios (taller, tienda, concesionario, pasarela) y Ollama NO van aquí: se agregan
+# en el compose del ecosistema completo que arman entre los cuatro grupos (Trabajo 7, Paso 3).
+services:
+  ventas-db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: motorred
+      POSTGRES_PASSWORD: motorred
+      POSTGRES_DB: motorred_ventas
+    volumes:
+      - ventas-db-datos:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U motorred -d motorred_ventas"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ventas:
+    build: .
+    depends_on:
+      ventas-db:
+        condition: service_healthy
+    ports:
+      - '4104:3000'
+    environment:
+      GRUPO: ventas
+      PUERTO: 3000
+      URL_PROPIA: http://ventas:3000
+      DB_HOST: ventas-db
+      DB_PORT: 5432
+      DB_USUARIO: motorred
+      DB_CLAVE: motorred
+      DB_BASE: motorred_ventas
+      # Los demás servicios del ecosistema, vistos DENTRO de la red de Docker (ajústelos al unir
+      # el compose de los cuatro grupos: Trabajo 7, Paso 3).
+      URL_TALLER: http://taller:4101
+      URL_TIENDA: http://tienda:4102
+      URL_CONCESIONARIO: http://concesionario:4103
+      URL_PASARELA: http://pasarela:4199
+      NOTIFICACIONES_PERMITIDAS: http://taller:4101
+      OLLAMA_URL: http://host.docker.internal:11434
+      EMBED_MODELO: nomic-embed-text
+      EMBED_DIMENSIONES: 768
+      LLM_MODELO: qwen2.5:7b
+    env_file:
+      - .env
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+
+volumes:
+  ventas-db-datos:

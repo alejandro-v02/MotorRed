@@ -1,0 +1,15 @@
+MATERIAL DEL PROYECTO INTEGRADOR MOTORRED (Instructivo 5)
+Complementario: Implementacion de soluciones de inteligencia artificial (21730210)
+
+Descomprima este archivo DENTRO de su carpeta ia-sena. Queda la carpeta ecosistema-motor:
+  contrato/            el contrato del ecosistema (JavaScript y, en contrato/ts, TypeScript para NestJS)
+  simuladores/         implementacion de referencia de los cuatro grupos y la pasarela de pagos simulada
+  pruebas/             conformidad, escenarios, agentes, carga, trazas y evaluacion del diagnostico
+  agentes/ y lib/      agentes de referencia con barandas y librerias comunes
+  datos/               datos de prueba del contrato (catalogos, vehiculos, base de fallas, casos)
+  plantilla-nestjs/    punto de partida del servicio de cada grupo
+  docs/contrato.md     el contrato en tablas
+  docker-compose.yml   el ecosistema de simuladores en contenedores
+
+Primeros pasos:  cd ecosistema-motor ;  npm ci ;  npm run ecosistema  (y en otra terminal)  npm run escenarios
+Requiere Node.js 20.19 o superior y Docker.
