@@ -1,0 +1,51 @@
+{
+  "_nota": "Precios de PRÁCTICA (COP, sin IVA) para el adaptador simulado de la tienda. Los códigos son los del catálogo universal de repuestos del Taller (MCP-Taller.xlsx, hoja Catálogos). Se reemplazan por los precios reales cuando exista el contrato de la Tienda.",
+  "PAS-DEL-CER": [
+    { "tienda": "AutoPartes La 68", "proveedor": "tienda", "precio_unitario": 172050, "stock": 6 },
+    { "tienda": "Repuestos del Sur", "proveedor": "tienda", "precio_unitario": 181000, "stock": 12 }
+  ],
+  "PAS-TRA-CER": [
+    { "tienda": "AutoPartes La 68", "proveedor": "tienda", "precio_unitario": 139000, "stock": 5 }
+  ],
+  "DIS-DEL-VENT": [
+    { "tienda": "AutoPartes La 68", "proveedor": "tienda", "precio_unitario": 268000, "stock": 4 },
+    { "tienda": "Concesionario Pitalito", "proveedor": "concesionario", "precio_unitario": 349000, "stock": 8 }
+  ],
+  "LIQ-FRE-DOT4": [
+    { "tienda": "Repuestos del Sur", "proveedor": "tienda", "precio_unitario": 24500, "stock": 30 }
+  ],
+  "ACE-5W30-1L": [
+    { "tienda": "Repuestos del Sur", "proveedor": "tienda", "precio_unitario": 38000, "stock": 40 }
+  ],
+  "FIL-ACE-STD": [
+    { "tienda": "AutoPartes La 68", "proveedor": "tienda", "precio_unitario": 25000, "stock": 20 }
+  ],
+  "FIL-AIRE-STD": [
+    { "tienda": "AutoPartes La 68", "proveedor": "tienda", "precio_unitario": 42000, "stock": 15 }
+  ],
+  "BUJ-IRI-STD": [
+    { "tienda": "AutoPartes La 68", "proveedor": "tienda", "precio_unitario": 36000, "stock": 24 }
+  ],
+  "BOB-ENC-STD": [
+    { "tienda": "AutoPartes La 68", "proveedor": "tienda", "precio_unitario": 118000, "stock": 8 },
+    { "tienda": "Concesionario Pitalito", "proveedor": "concesionario", "precio_unitario": 156000, "stock": 5 }
+  ],
+  "SEN-OXI-STD": [
+    { "tienda": "Repuestos del Sur", "proveedor": "tienda", "precio_unitario": 142000, "stock": 6 }
+  ],
+  "BAT-12V-60AH": [
+    { "tienda": "Repuestos del Sur", "proveedor": "tienda", "precio_unitario": 389000, "stock": 7 }
+  ],
+  "ALT-90A-STD": [
+    { "tienda": "Concesionario Pitalito", "proveedor": "concesionario", "precio_unitario": 612000, "stock": 2 }
+  ],
+  "AMO-DEL-GAS": [
+    { "tienda": "AutoPartes La 68", "proveedor": "tienda", "precio_unitario": 215000, "stock": 6 }
+  ],
+  "AMO-TRA-GAS": [
+    { "tienda": "AutoPartes La 68", "proveedor": "tienda", "precio_unitario": 188000, "stock": 6 }
+  ],
+  "KIT-EMB-STD": [
+    { "tienda": "Concesionario Pitalito", "proveedor": "concesionario", "precio_unitario": 745000, "stock": 3 }
+  ]
+}

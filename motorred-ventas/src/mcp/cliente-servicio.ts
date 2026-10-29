@@ -20,11 +20,17 @@ export class ClienteServicio {
       clientId: string;
       clientSecret: string;
       alcances: string[];
+      // Si el destino entrega un token de portador fijo en vez de OAuth client_credentials, va aquí.
+      tokenFijo?: string;
     },
   ) {}
 
   private async token(): Promise<string> {
-    const { url, clientId, clientSecret, alcances, destino } = this.opciones;
+    const { url, clientId, clientSecret, alcances, destino, tokenFijo } = this.opciones;
+    if (tokenFijo) {
+      this.vence = Date.now() + 3_540_000;
+      return tokenFijo;
+    }
     const r = await fetch(`${url}/oauth/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

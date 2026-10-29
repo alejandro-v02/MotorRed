@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { PERMISOS_FACTURACION } from './contrato/facturacion.js';
 import { PERMISOS } from './contrato/herramientas.js';
 
 // Lee el .env de esta carpeta. Los valores por defecto coinciden con los del kit del ecosistema,
@@ -20,7 +21,7 @@ export const SECRETO_JWT = v(`SECRETO_JWT_${GRUPO.toUpperCase()}`, `lab-jwt-${GR
 
 // Clientes de servicio que acepta este grupo: CLIENTE_<CLIENTE>_EN_<GRUPO>=secreto
 export const CLIENTES: Record<string, { secreto: string; alcances: string[] }> = Object.fromEntries(
-  Object.entries(PERMISOS[GRUPO]).map(([cliente, alcances]) => [
+  Object.entries({ ...PERMISOS[GRUPO], ...(GRUPO === 'ventas' ? PERMISOS_FACTURACION : {}) }).map(([cliente, alcances]) => [
     cliente,
     { secreto: v(`CLIENTE_${cliente.toUpperCase()}_EN_${GRUPO.toUpperCase()}`, `lab-${cliente}-en-${GRUPO}`), alcances },
   ]),
@@ -58,6 +59,32 @@ export const PARAMETROS_POR_DEFECTO = {
     servicio: { tarifa: n('RETEFUENTE_SERVICIOS', 4), base_uvt: n('RETEFUENTE_SERVICIOS_BASE_UVT', 2) },
     repuesto: { tarifa: n('RETEFUENTE_COMPRAS', 2.5), base_uvt: n('RETEFUENTE_COMPRAS_BASE_UVT', 10) },
   },
+};
+
+// ---------- Facturación (contrato del Taller real: Docs/Equipos/MCP-Taller.xlsx) ----------
+// Todo lo que depende de un grupo del que aún no se tiene el contrato está detrás de un "modo":
+//   TIENDA_MODO       simulado | real     (real = falta escribir facturacion/adaptadores/tienda.real.ts)
+//   NOTIFICADOR_MODO  bandeja | telegram  (telegram = falta escribir facturacion/adaptadores/notificador.telegram.ts)
+// Ver docs/pendientes-contratos.md para la lista de qué archivo editar cuando llegue cada contrato.
+export const FACTURACION = {
+  vigenciaHoras: n('COTIZACION_VIGENCIA_HORAS', 48),
+  tiendaModo: v('TIENDA_MODO', 'simulado'),
+  notificadorModo: v('NOTIFICADOR_MODO', 'bandeja'),
+  // El Taller no envía si el cliente es agente de retención: se asume este valor (1 = retenedor).
+  clienteRetenedor: v('CLIENTE_RETENEDOR', '0') === '1',
+  // MCP del Taller real. Sin URL, los mensajes quedan en la bandeja de salida (mensajes_salida).
+  taller: {
+    url: v('TALLER_FACT_URL', ''),
+    // Token de portador fijo que el Taller entrega a Facturación. Pendiente confirmar si el Taller
+    // usa este esquema o OAuth client_credentials como el contrato 1.0.
+    token: v('TALLER_FACT_TOKEN', ''),
+    reintentos: n('TALLER_FACT_REINTENTOS', 5),
+  },
+  // Rutas internas (/internos/cotizaciones/...): llave de operador, ver FacturacionController.
+  llaveInterna: v('FACT_LLAVE_INTERNA', 'lab-llave-interna-cambie-esto'),
+  // Dirección que se guarda como url_notificacion de las ventas que nacen de una cotización: el
+  // Taller real no expone POST /eventos, así que los eventos de venta se quedan en este servicio.
+  urlEventosVenta: `${URL_PROPIA}/internos/eventos-venta`,
 };
 
 // Base de datos propia del servicio (una base de datos por servicio: regla del Trabajo 7).
