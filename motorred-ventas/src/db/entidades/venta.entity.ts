@@ -60,6 +60,11 @@ export class VentaEntity {
   @Column({ type: 'varchar', nullable: true })
   motivo!: string | null;
 
+  // Interno: cotización de Facturación de la que nace esta venta (null en las ventas del contrato 1.0).
+  @Index()
+  @Column({ type: 'varchar', nullable: true })
+  cotizacion_ref!: string | null;
+
   // true cuando ya se confirmaron todas las reservas y se liquidó (para no repetir la saga).
   @Column({ type: 'boolean', default: false })
   liquidada!: boolean;

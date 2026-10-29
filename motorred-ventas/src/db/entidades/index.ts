@@ -8,3 +8,6 @@ export { ParametroTributarioEntity } from './parametro-tributario.entity.js';
 export { ClaveIdempotenciaEntity } from './clave-idempotencia.entity.js';
 export { FragmentoConocimientoEntity } from './fragmento-conocimiento.entity.js';
 export { DecisionRiesgoEntity } from './decision-riesgo.entity.js';
+export { CotizacionEntity } from './cotizacion.entity.js';
+export { LineaCotizacionEntity } from './linea-cotizacion.entity.js';
+export { MensajeSalidaEntity } from './mensaje-salida.entity.js';
