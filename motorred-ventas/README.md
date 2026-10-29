@@ -8,6 +8,12 @@ algo no cuadra, no improvisa: deja la venta `en_revision` para una persona.
 Construido sobre la plantilla NestJS del kit (`ecosistema-motor/plantilla-nestjs`), con PostgreSQL
 + pgvector, TypeORM con migraciones, y cuatro agentes de IA con barandas.
 
+**Informe técnico completo (para la entrega del Trabajo 8):** [`docs/informe-tecnico.md`](docs/informe-tecnico.md)
+— reúne el modelo de datos, los ADR, las fichas de los agentes, el informe de pruebas y el plan de
+respaldo en un solo documento. Para exportarlo a PDF: ábralo en VS Code y use la extensión
+"Markdown PDF" (clic derecho → "Markdown PDF: Export (pdf)"), o ábralo con la vista previa de
+Markdown y use "Imprimir → Guardar como PDF" desde el navegador.
+
 ## Qué trae
 
 - Las 5 herramientas MCP de ventas (`crear_venta`, `consultar_venta`, `generar_cobro`,
