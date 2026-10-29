@@ -69,6 +69,18 @@ export const DB = {
   base: v('DB_BASE', 'motorred_ventas'),
 };
 
+// Integración con el taller REAL (contrato propio, no el del kit: ver ADR 0003 y
+// docs/contratos-reales/mcp-taller.md). Autenticación por token fijo compartido, como el patrón
+// MCP_<DESTINO>_URL / MCP_<DESTINO>_TOKEN que ya usa el taller para sus propias llamadas salientes.
+export const TALLER_REAL = {
+  // Token que el taller debe presentar al llamarnos (Authorization: Bearer <...>).
+  tokenEntrante: v('MCP_FACTURACION_TOKEN', 'lab-facturacion-token-cambie-esto'),
+  // Dirección y token del MCP del taller, para nuestras llamadas de vuelta
+  // (registrar_respuesta_cliente, registrar_pago).
+  url: v('MCP_TALLER_URL', 'http://localhost:3001'),
+  token: v('MCP_TALLER_TOKEN', 'lab-taller-token-cambie-esto'),
+};
+
 // Modelo de embeddings para el RAG (Actividad 4.4). Por defecto, el de Ollama local.
 export const RAG = {
   ollamaUrl: v('OLLAMA_URL', 'http://localhost:11434'),

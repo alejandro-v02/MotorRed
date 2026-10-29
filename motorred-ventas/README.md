@@ -14,6 +14,32 @@ respaldo en un solo documento. Para exportarlo a PDF: ábralo en VS Code y use l
 "Markdown PDF" (clic derecho → "Markdown PDF: Export (pdf)"), o ábralo con la vista previa de
 Markdown y use "Imprimir → Guardar como PDF" desde el navegador.
 
+## Integración con el taller real (`/mcp-facturacion`)
+
+El grupo de Falla (taller) construyó su propio contrato MCP, distinto del kit — ahí nos llaman
+**"facturación"**. Ver [`docs/contratos-reales/mcp-taller.md`](docs/contratos-reales/mcp-taller.md)
+y [ADR 0003](docs/adr/0003-integracion-taller-real.md). Publicamos dos herramientas nuevas en
+`/mcp-facturacion` (autenticación por token fijo, `MCP_FACTURACION_TOKEN`): `crear_cotizacion` y
+`notificar_reparacion_terminada`. Como el taller no nos ha dado el contrato real de tienda ni una
+pasarela PSE/Telegram, esas tres partes están simuladas (`src/facturacion/`), con rutas de
+laboratorio para avanzar el flujo a mano:
+
+```bash
+# 1. Un "taller falso" que recibe nuestras llamadas de vuelta (solo para probar)
+node pruebas/taller-falso.mjs 3001
+
+# 2. El flujo completo: cotizar → aceptar → terminar reparación → pagar
+node pruebas/probar-facturacion.mjs
+curl -X POST http://localhost:3000/facturacion/sandbox/telegram/<cotizacion_ref>/responder \
+  -H "Content-Type: application/json" -d '{"aceptada":true}'
+node pruebas/probar-reparacion.mjs <cotizacion_ref>
+curl -X POST http://localhost:3000/facturacion/sandbox/pse/<referencia_pse>/confirmar
+```
+
+Internamente, al confirmarse el pago, se crea una venta y se liquida con el mismo `DineroService`
+y las mismas tablas (`ventas`, `dispersiones`, `asientos`) que ya se probaron con el contrato del
+kit — eso no cambió, solo la forma de hablar con el taller.
+
 ## Qué trae
 
 - Las 5 herramientas MCP de ventas (`crear_venta`, `consultar_venta`, `generar_cobro`,
