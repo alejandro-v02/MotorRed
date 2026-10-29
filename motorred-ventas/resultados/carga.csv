@@ -1,0 +1,12 @@
+paso;p50_ms;p95_ms;max_ms
+registrar_ingreso;202;336;336
+diagnosticar;56;141;141
+cotizar;351;568;568
+aprobar_opcion;407;920;920
+pago_hasta_liquidacion;392;661;661
+
+ordenes;20
+paralelo;5
+completas;20
+errores;0
+segundos;6.0

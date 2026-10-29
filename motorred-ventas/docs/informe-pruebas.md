@@ -2,9 +2,9 @@
 
 Trabajo 8 del Instructivo 5. Corridas reales contra este servicio (no el simulador), con los
 cuatro simuladores de referencia de `ecosistema-motor` como taller/tienda/concesionario/pasarela,
-Node.js 24, Docker (PostgreSQL 16 + pgvector) y Ollama (`nomic-embed-text` para el RAG,
-`llama3.2` como `LLM_MODELO` de prueba — ver la sección de rendimiento sobre por qué ese modelo
-en particular).
+Node.js 24, Docker (PostgreSQL 16 + pgvector) y Ollama (`nomic-embed-text` para el RAG; para el
+chat del agente de Riesgo se probó tanto con `llama3.2`, instalado, como con `qwen2.5:7b`, el
+valor por defecto de `.env.ejemplo` — ver la sección de rendimiento por qué se reportan las dos).
 
 ## 1. Funcionalidad
 
@@ -44,9 +44,13 @@ firma del webhook). Detalle en `resultados/conformidad-ventas.csv` (generado por
 
 ## 3. Rendimiento
 
+Dos corridas reales de `node pruebas/carga.mjs 20 5`, con la única diferencia de qué modelo
+contesta en `LLM_MODELO` — y el contraste entre las dos es en sí mismo el hallazgo de esta sección.
+
+**Corrida A — `LLM_MODELO=llama3.2` (modelo instalado y disponible):**
+
 ```
-node pruebas/carga.mjs 20 5
-→ 20 órdenes, 5 en paralelo: 20 completas, 0 con error, 50.1 s, 24 órdenes por minuto
+20 órdenes, 5 en paralelo: 20 completas, 0 con error, 50.1 s, 24 órdenes por minuto
 ```
 
 | Paso | p50 ms | p95 ms | máx ms |
@@ -57,17 +61,40 @@ node pruebas/carga.mjs 20 5
 | aprobar_opcion | 8945 | 9409 | 9409 |
 | pago_hasta_liquidacion | 705 | 9538 | 9538 |
 
+**Corrida B — `LLM_MODELO=qwen2.5:7b` (configurado en `.env.ejemplo`, pero no instalado en Ollama
+en esta máquina — ver `resultados/carga.csv`):**
+
+```
+20 órdenes, 5 en paralelo: 20 completas, 0 con error, 6.0 s, 199 órdenes por minuto
+```
+
+| Paso | p50 ms | p95 ms | máx ms |
+|---|---|---|---|
+| registrar_ingreso | 202 | 336 | 336 |
+| diagnosticar | 56 | 141 | 141 |
+| cotizar | 351 | 568 | 568 |
+| aprobar_opcion | 407 | 920 | 920 |
+| pago_hasta_liquidacion | 392 | 661 | 661 |
+
 **De dónde sale la diferencia con los simuladores** (que en el kit dan ~1100 órdenes/minuto): los
 simuladores no llaman PostgreSQL ni ningún modelo. Aquí, `aprobar_opcion` incluye la llamada de
 `crear_venta` a este servicio, que antes de cobrar evalúa el riesgo con el agente de IA
-(`AgenteRiesgoService`). Con `LLM_MODELO=llama3.2`, el modelo nunca respondió dentro del tiempo
-máximo de 8 s configurado a propósito para esta ruta síncrona (ver el ADR 0002 y la sección 6):
-el agente cae siempre al plan B, y esos ~8 s son casi todo el tiempo de `aprobar_opcion`.
-**Qué se haría para reducirla**: usar un modelo con mejor soporte de salida estructurada y más
-rápido (`qwen2.5:7b` o `qwen3:8b`, que el Instructivo 5 recomienda para agentes con herramientas,
-o el proveedor en la nube), o evaluar el riesgo de forma asíncrona después de responder al taller
-cuando el nivel resulta "bajo" en el plan B rápido y solo bloquear de forma síncrona los casos que
-superan el umbral medio.
+(`AgenteRiesgoService`).
+
+**Por qué la corrida A es ~22 veces más lenta que la B, con el mismo código**: con `llama3.2`
+(instalado), Ollama sí responde, pero el modelo nunca contesta dentro del tiempo máximo de 8 s
+configurado a propósito para esta ruta síncrona (ver el ADR 0002 y la sección 6): el agente espera
+los 8 s completos antes de caer al plan B. Con `qwen2.5:7b` (no instalado), Ollama responde de
+inmediato con "modelo no encontrado", así que el agente cae al plan B casi sin esperar — de ahí
+`aprobar_opcion` en ~400 ms en vez de ~9 s. **La lección no es "usar un modelo que falle"**: es que
+el tiempo máximo y el plan B (la baranda) protegen el tiempo de respuesta sin importar POR QUÉ el
+modelo no contestó a tiempo, sea porque es lento o porque no está disponible.
+**Qué se haría para reducirla de verdad** (con un modelo que sí responda y sea útil, no solo
+rápido por no estar instalado): instalar y usar un modelo con mejor soporte de salida estructurada
+y más rápido (`qwen2.5:7b` o `qwen3:8b`, que el Instructivo 5 recomienda para agentes con
+herramientas, o el proveedor en la nube), o evaluar el riesgo de forma asíncrona después de
+responder al taller cuando el nivel resulta "bajo" en el plan B rápido, bloqueando de forma
+síncrona solo los casos que superan el umbral medio.
 
 ## 4. Acceso y seguridad
 
