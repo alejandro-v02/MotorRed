@@ -20,6 +20,10 @@ import { ProveedoresService } from './negocio/proveedores.service.js';
 import { VentasService } from './negocio/ventas.service.js';
 import { WebhookPasarelaController } from './negocio/webhook-pasarela.controller.js';
 import { SaludController } from './salud.controller.js';
+import { CotizacionesService } from './facturacion/cotizaciones.service.js';
+import { FacturacionController } from './facturacion/facturacion.controller.js';
+import { proveedoresFacturacion } from './facturacion/proveedores-facturacion.js';
+import { SalidaService } from './facturacion/salida.service.js';
 
 @Module({
   imports: [
@@ -27,10 +31,11 @@ import { SaludController } from './salud.controller.js';
     TypeOrmModule.forRoot(opcionesDB),
     TypeOrmModule.forFeature([VentaEntity]),
   ],
-  controllers: [SaludController, OauthController, McpController, BitacoraController, WebhookPasarelaController, AgentesController],
+  controllers: [SaludController, OauthController, McpController, BitacoraController, WebhookPasarelaController, AgentesController, FacturacionController],
   providers: [
     HerramientasService, BitacoraService, DineroService, ParametrosService, ProveedoresService, VentasService,
     RagService, AgenteRiesgoService, AgenteCobroService, AgenteConciliacionService, AgenteContableService,
+    ...proveedoresFacturacion, SalidaService, CotizacionesService,
   ],
 })
 export class AppModule {}

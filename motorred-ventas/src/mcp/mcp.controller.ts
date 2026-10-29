@@ -5,6 +5,7 @@ import { McpServer, createMcpHandler } from '@modelcontextprotocol/server';
 import type { Request, Response } from 'express';
 import { GRUPO } from '../config.js';
 import { VERSION_CONTRATO } from '../contrato/esquemas.js';
+import { HERRAMIENTAS_FACTURACION } from '../contrato/facturacion.js';
 import { herramientasDe } from '../contrato/herramientas.js';
 import { ErrorNegocio } from '../negocio/errores.js';
 import { HerramientasService } from '../negocio/herramientas.service.js';
@@ -36,7 +37,10 @@ export class McpController {
         name: `motorred-${GRUPO}`,
         version: VERSION_CONTRATO,
       });
-      for (const h of herramientasDe(GRUPO)) {
+      // Las del contrato 1.0 de este grupo, más las de Facturación (contrato del Taller real). Cada
+      // una solo se publica a quien tiene su alcance: los clientes de Facturación son aparte (taller_fact).
+      const publicables = [...herramientasDe(GRUPO), ...(GRUPO === 'ventas' ? HERRAMIENTAS_FACTURACION : [])];
+      for (const h of publicables) {
         const alcances = Array.isArray(h.alcance) ? h.alcance : [h.alcance];
         if (!alcances.some((a) => cliente.alcances.includes(a))) continue;
         servidor.registerTool(

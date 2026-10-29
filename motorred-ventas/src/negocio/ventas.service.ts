@@ -4,7 +4,7 @@ import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import type { DataSource, Repository } from 'typeorm';
 import type { z } from 'zod';
 import { AgenteRiesgoService } from '../agentes/agente-riesgo.service.js';
-import { FIRMA_EVENTOS_PASARELA, FIRMA_EVENTOS_VENTAS, NOTIFICACIONES_PERMITIDAS, PASARELA_LLAVE, URL_PROPIA, URLS } from '../config.js';
+import { FACTURACION, FIRMA_EVENTOS_PASARELA, FIRMA_EVENTOS_VENTAS, NOTIFICACIONES_PERMITIDAS, PASARELA_LLAVE, URL_PROPIA, URLS } from '../config.js';
 import type { LineaVenta, Pagador } from '../contrato/esquemas.js';
 import { enviarEvento } from '../mcp/eventos.js';
 import { verificarFirma } from '../mcp/firma.js';
@@ -84,6 +84,9 @@ export class VentasService {
   private readonly enCurso = new Set<string>();
   // Cola de notificaciones por venta: venta.pagada siempre sale antes que venta.liquidada.
   private readonly colas = new Map<string, Promise<unknown>>();
+  // Quien quiera enterarse de los cambios de estado de una venta (Facturación, para responderle al
+  // Taller cuando el PSE se paga) se suscribe aquí. Ventas no depende de quien escucha.
+  private readonly oyentes: ((venta: VentaEntity, evento: string) => Promise<void>)[] = [];
 
   constructor(
     @InjectRepository(VentaEntity) private readonly ventasRepo: Repository<VentaEntity>,
@@ -218,11 +221,27 @@ export class VentasService {
     this.colas.set(venta.venta_id, siguiente);
   }
 
+  alCambiar(oyente: (venta: VentaEntity, evento: string) => Promise<void>): void {
+    this.oyentes.push(oyente);
+  }
+
+  // Un oyente que falla no puede romper la saga de pago: se registra y se sigue.
+  private async emitir(venta: VentaEntity, evento: string): Promise<void> {
+    for (const oyente of this.oyentes) {
+      try {
+        await oyente(venta, evento);
+      } catch (e) {
+        this.bitacora.registrar({ traza_id: venta.traza_id, evento: 'oyente_fallido', ok: false, venta_id: venta.venta_id, cambio: evento, error: (e as Error).message });
+      }
+    }
+  }
+
   private async aRevision(venta: VentaEntity, motivo: string): Promise<void> {
     venta.estado = 'en_revision';
     venta.motivo = motivo;
     await this.ventasRepo.update({ venta_id: venta.venta_id }, { estado: 'en_revision', motivo });
     this.bitacora.registrar({ traza_id: venta.traza_id, evento: 'venta_en_revision', ok: true, venta_id: venta.venta_id, motivo });
+    await this.emitir(venta, 'en_revision');
   }
 
   private async cobrar(venta: VentaEntity): Promise<void> {
@@ -261,6 +280,7 @@ export class VentasService {
     venta.estado = 'pagada';
     await this.ventasRepo.update({ venta_id: venta.venta_id }, { estado: 'pagada' });
     this.notificar(venta, 'venta.pagada');
+    await this.emitir(venta, 'pagada');
     try {
       for (const [reserva_id, proveedor] of this.reservasDe(this.lineasParaCalculo(venta.lineas))) {
         await this.proveedores.de(proveedor).llamar('confirmar_reserva', { traza_id: venta.traza_id, reserva_id, venta_id: venta.venta_id });
@@ -276,6 +296,7 @@ export class VentasService {
       venta.motivo = (e as Error).message;
       await this.ventasRepo.update({ venta_id: venta.venta_id }, { estado: 'reembolsada', motivo: venta.motivo });
       this.notificar(venta, 'venta.reembolsada', { motivo: venta.motivo });
+      await this.emitir(venta, 'reembolsada');
       return;
     }
     const parametros = await this.parametros.actuales();
@@ -287,15 +308,21 @@ export class VentasService {
     venta.liquidada = true;
     this.bitacora.registrar({ traza_id: venta.traza_id, evento: 'venta_liquidada', ok: true, venta_id: venta.venta_id, recaudado: liquidacion.recaudado, cuadra: liquidacion.cuadra });
     this.notificar(venta, 'venta.liquidada', { dispersiones: dispersionesFinal.map(({ beneficiario, neto }) => ({ beneficiario, neto })) });
+    await this.emitir(venta, 'liquidada');
   }
 
   // ---------------------------------------------------------------------- creación ----
 
-  private async crear(args: CrearVentaInput): Promise<VentaEntity> {
-    if (!NOTIFICACIONES_PERMITIDAS.includes(new URL(args.url_notificacion).origin)) {
-      throw new ErrorNegocio('DATOS_INVALIDOS', 'url_notificacion no está entre los destinos permitidos');
+  // desdeFacturacion: la venta nace de una cotización aceptada. Facturación compró los repuestos y
+  // validó cada precio contra su propia orden de compra (cotizaciones.service.ts), así que no hay
+  // reservas de proveedor que verificar ni un Taller al que notificar por url_notificacion.
+  private async crear(args: CrearVentaInput, desdeFacturacion?: { cotizacion_ref: string }): Promise<VentaEntity> {
+    if (!desdeFacturacion) {
+      if (!NOTIFICACIONES_PERMITIDAS.includes(new URL(args.url_notificacion).origin)) {
+        throw new ErrorNegocio('DATOS_INVALIDOS', 'url_notificacion no está entre los destinos permitidos');
+      }
+      await this.verificarLineas(args.traza_id, args.lineas, args.pagador, null);
     }
-    await this.verificarLineas(args.traza_id, args.lineas, args.pagador, null);
     const t = this.dinero.totales(args.lineas);
     const parametros = await this.parametros.actuales();
     const ret = Object.values(this.dinero.retenciones(args.lineas, args.pagador, parametros)).reduce((s, x) => s + x, 0);
@@ -309,6 +336,7 @@ export class VentasService {
       await manager.insert(VentaEntity, {
         venta_id, orden_id: args.orden_id, traza_id: args.traza_id, estado: 'pendiente_pago', pagador: args.pagador,
         subtotal: t.subtotal, iva: t.iva, retenciones: ret, total: t.total, total_a_pagar, url_pago: null, url_notificacion: args.url_notificacion,
+        cotizacion_ref: desdeFacturacion?.cotizacion_ref ?? null,
       });
       if (args.lineas.length) {
         await manager.insert(
@@ -351,6 +379,17 @@ export class VentasService {
       throw e;
     }
     return venta;
+  }
+
+  // Venta final de una cotización de Facturación, con lo realmente hecho y usado. La idempotencia la
+  // garantiza quien llama (una cotización solo tiene una venta). Devuelve la venta ya con su cobro.
+  async crearDesdeFacturacion(args: { cotizacion_ref: string; traza_id: string; orden_id: string; pagador: PagadorInput; lineas: LineaVentaInput[] }): Promise<VentaPublica & { cobro_id: string | null }> {
+    const venta = await this.crear(
+      { traza_id: args.traza_id, clave_idempotencia: args.cotizacion_ref, orden_id: args.orden_id, pagador: args.pagador, lineas: args.lineas, url_notificacion: FACTURACION.urlEventosVenta },
+      { cotizacion_ref: args.cotizacion_ref },
+    );
+    const fresca = await this.ventasRepo.findOneOrFail({ where: { venta_id: venta.venta_id }, relations: ['lineas'] });
+    return { ...this.publica(fresca), cobro_id: fresca.cobro_id };
   }
 
   private async siguienteVentaId(): Promise<string> {
@@ -467,6 +506,7 @@ export class VentasService {
         await this.ventasRepo.update({ venta_id: venta.venta_id }, { estado: 'pago_rechazado' });
         await this.db.query(`UPDATE cobros SET estado = 'rechazado' WHERE cobro_id = $1`, [venta.cobro_id]);
         this.notificar(venta, 'venta.pago_rechazado');
+        await this.emitir(venta, 'pago_rechazado');
       }
       await this.db.query(`INSERT INTO eventos_pasarela (evento_id, cobro_id, venta_id, tipo, monto, resultado) VALUES ($1,$2,$3,$4,$5,'procesado')`, [e.evento_id, e.cobro_id, venta.venta_id, e.tipo, e.monto]);
       return { status: 200, body: { recibido: true } };
