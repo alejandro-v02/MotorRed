@@ -15,6 +15,8 @@ RUN npm ci --omit=dev --no-audit --no-fund
 COPY --from=build /app/dist ./dist
 # docs/ va en la imagen porque db/seed.js la lee para indexar el RAG (Actividad 4.4).
 COPY docs ./docs
+# datos/ lleva los precios del adaptador simulado de la tienda (Facturación).
+COPY datos ./datos
 USER node
 EXPOSE 3000
 CMD ["node", "dist/main.js"]

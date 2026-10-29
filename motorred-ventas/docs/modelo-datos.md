@@ -21,6 +21,24 @@ directamente, todo pasa por el contrato MCP.
 
 Ver la migración completa en [`src/db/migraciones/0001_inicial.ts`](../src/db/migraciones/0001_inicial.ts).
 
+### Facturación (migración `0002_cotizaciones`)
+
+Tablas para el flujo del Taller real (cotizar antes de vender). Ver el contrato en
+[`src/contrato/facturacion.ts`](../src/contrato/facturacion.ts) y los pendientes en
+[`pendientes-contratos.md`](pendientes-contratos.md).
+
+| Tabla | Para qué | Columnas clave |
+|---|---|---|
+| `cotizaciones` | Una por orden del Taller. | `cotizacion_ref` (PK, `FAC-OT-0054`), `codigo` (único, la orden), `traza_id`, `estado` (`ESTADOS_COTIZACION`), `cliente`/`vehiculo` (jsonb), `subtotal`, `iva`, `total`, `total_cliente`, `total_cubierto_garantia`, `vence_en`, `huella` (idempotencia), `venta_id`, `pago_ref` |
+| `lineas_cotizacion` | Mano de obra y repuestos de cada cotización. | `cotizacion_ref` (FK), `tipo` (`mano_obra`/`repuesto`), `referencia` (SKU o código universal), `precio_unitario` (nulo hasta cotizar), `pagador` (`cliente`/`fabricante`/`tienda`/`taller`), `proveedor`, `tienda`, `oferta_ref`, `compra_ref`, `estado` |
+| `mensajes_salida` | Bandeja de salida: lo que Facturación entrega al Taller (`registrar_respuesta_cliente`, `registrar_pago`) y los avisos al cliente. | `id_mensaje` (único, el mismo en cada reintento), `destino` (`taller`/`cliente`), `tipo`, `payload` (jsonb), `estado` (`pendiente`/`enviado`/`fallido`), `intentos` |
+| `ventas.cotizacion_ref` | Enlaza la venta final con su cotización (nulo en las ventas del contrato 1.0). | — |
+
+Una venta que nace de una cotización reutiliza todo lo anterior (cobro, saga, liquidación, dispersión y
+asientos): Facturación crea la venta cuando el Taller informa la reparación terminada, con lo realmente
+hecho y usado.
+
+
 ## Por qué `reservas_venta_activas` en vez de un campo en `lineas_venta`
 
 El simulador de referencia (`ventas.mjs`) usa un `Map<reserva_id, venta_id>` en memoria para saber

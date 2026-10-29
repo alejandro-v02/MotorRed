@@ -29,6 +29,20 @@ Markdown y use "Imprimir → Guardar como PDF" desde el navegador.
 - Dos ADR ([`docs/adr/`](docs/adr/)) sobre el modelo de datos y sobre qué decide el agente vs. el código.
 - `Dockerfile` + `docker-compose.yml` con su propia base de datos.
 
+## Facturación (contrato del Taller real)
+
+Además del contrato 1.0 del kit, este servicio atiende el flujo del Taller real
+(`Docs/Equipos/MCP-Taller.xlsx`): el Taller envía el diagnóstico (`crear_cotizacion`), Facturación busca
+los precios de los repuestos, cotiza con IVA y avisa al cliente; el cliente acepta o rechaza; cuando la
+reparación termina (`notificar_reparacion_terminada`) cobra por PSE lo realmente hecho y le responde al
+Taller con `registrar_respuesta_cliente` y `registrar_pago`.
+
+- Contrato: [`src/contrato/facturacion.ts`](src/contrato/facturacion.ts) (clientes `taller_fact` y `app_fact`, aparte de los del 1.0).
+- Lógica: [`src/facturacion/`](src/facturacion/) — `cotizaciones.service.ts` (flujo), `salida.service.ts` (bandeja con reintentos), `adaptadores/` (tienda, Taller, notificador).
+- **Lo que depende de otros grupos está detrás de adaptadores simulados** y se completa editando un archivo cada uno: ver [`docs/pendientes-contratos.md`](docs/pendientes-contratos.md). Plan de trabajo: [`docs/plan-facturacion.md`](docs/plan-facturacion.md).
+- Pruebas: `node pruebas/simulador-taller-facturacion.mjs` (Taller simulado, :4111) y `node pruebas/escenarios-facturacion.mjs` (**56 de 56**, resultados en `resultados/escenarios-facturacion.csv`). Requieren `TALLER_FACT_URL=http://localhost:4111` y `TALLER_FACT_TOKEN=lab-token-taller-fact` en `.env`.
+- Rutas internas (cabecera `X-Llave-Interna`): `POST /internos/cotizaciones/:codigo/respuesta` (decisión del cliente), `GET /internos/cotizaciones/:codigo`, `GET /internos/notificaciones`, `GET /internos/mensajes`.
+
 ## Primeros pasos
 
 ```bash
