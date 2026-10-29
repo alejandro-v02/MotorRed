@@ -234,6 +234,15 @@ herramientas por cliente con sus esquemas exactos, y las reglas de negocio (idem
 simultánea, verificación de precios contra la reserva, retenciones, partida doble, anulación,
 firma del webhook). Detalle en `resultados/conformidad-ventas.csv`.
 
+**También verificado dentro de Docker:** `docker compose build && docker compose up -d` levanta
+el servicio y su propia base de datos; tras correr las migraciones y el seed dentro del
+contenedor, la misma conformidad da **58/58 contra el contenedor**, incluida la liquidación real
+vía pasarela → webhook → saga. Única corrección necesaria: si la pasarela corre fuera de este
+compose (en el host), `URL_PROPIA` debe apuntar a `http://localhost:<puerto publicado>`, no a
+`host.docker.internal` (que solo resuelve contenedor → host, no al revés). El valor por defecto
+del compose (`http://ventas:3000`) es el correcto para cuando los cuatro servicios y la pasarela
+corran juntos en el mismo compose (Trabajo 7, Paso 3).
+
 ## 4.3 Rendimiento
 
 Dos corridas reales de `node pruebas/carga.mjs 20 5`, con la única diferencia de qué modelo

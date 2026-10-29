@@ -1,6 +1,16 @@
 # Compose del servicio de Ventas (grupo Zaidy) con su propia base de datos (Trabajo 7, Paso 2).
 # Los demás servicios (taller, tienda, concesionario, pasarela) y Ollama NO van aquí: se agregan
 # en el compose del ecosistema completo que arman entre los cuatro grupos (Trabajo 7, Paso 3).
+#
+# Verificado: `docker compose build && docker compose up -d`, migraciones y seed con
+# `docker exec <contenedor> node dist/db/correr-migraciones.js` (y seed.js), conformidad 58/58
+# contra el contenedor. Nota para pruebas sueltas contra simuladores que corren FUERA de Docker
+# (en el host, no en este compose): URL_PROPIA debe ser una dirección que el proceso que llama
+# de vuelta (la pasarela) pueda resolver. Si la pasarela corre en el host, use
+# URL_PROPIA=http://localhost:<puerto publicado>, no host.docker.internal (esa dirección solo
+# resuelve DESDE dentro de un contenedor, no hacia él). Cuando los cuatro servicios y la pasarela
+# corran todos dentro del mismo compose (Trabajo 7, Paso 3), el valor de abajo
+# (http://ventas:3000) sí es el correcto, porque ahí la pasarela también está en la red de Docker.
 services:
   ventas-db:
     image: pgvector/pgvector:pg16
