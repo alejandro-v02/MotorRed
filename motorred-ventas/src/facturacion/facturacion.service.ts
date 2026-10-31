@@ -183,8 +183,8 @@ export class FacturacionService {
 
     await this.db.transaction(async (manager) => {
       await manager.query(
-        `INSERT INTO pagos_pse (referencia_pse, codigo, cotizacion_ref, valor, id_mensaje_entrada) VALUES ($1,$2,$3,$4,$5)`,
-        [referencia_pse, args.codigo, args.cotizacion_ref, totales.total, args.id_mensaje],
+        `INSERT INTO pagos_pse (referencia_pse, codigo, cotizacion_ref, valor, lineas_cobro, id_mensaje_entrada) VALUES ($1,$2,$3,$4,$5,$6)`,
+        [referencia_pse, args.codigo, args.cotizacion_ref, totales.total, JSON.stringify(lineasCalculo), args.id_mensaje],
       );
     });
     await this.marcarProcesado(args.id_mensaje, 'notificar_reparacion_terminada', args.codigo);
@@ -208,18 +208,11 @@ export class FacturacionService {
 
     const cFilas = await this.db.query(`SELECT * FROM cotizaciones WHERE cotizacion_ref = $1`, [pago.cotizacion_ref]);
     const c = cFilas[0];
-    const ordenCompra = (c?.orden_compra ?? []) as OrdenCompraLinea[];
 
-    // Reconstruye las mismas líneas que en recibirReparacionTerminada para liquidar y dejar la
-    // contabilidad interna (dispersión + asientos), reutilizando DineroService.liquidar().
-    // Simplificación: liquida sobre lo que quedó en la orden de compra de la cotización
-    // aceptada (no guardamos aparte mano_obra_realizada/partes_usadas de la notificación).
-    const manoObraCliente = (c.mano_obra as Array<{ sku: string; precio: number; garantia: { valida: boolean } }>).filter((l) => !l.garantia.valida);
-    const repuestosCliente = ordenCompra.filter((o) => (o.pagador ?? 'cliente') === 'cliente');
-    const lineas: LineaParaCalculo[] = [
-      ...manoObraCliente.map((l) => ({ beneficiario: 'taller', concepto: 'servicio' as const, cantidad: 1, precio_unitario: l.precio, iva_porcentaje: 19 })),
-      ...repuestosCliente.map((r) => ({ beneficiario: 'tienda', concepto: 'repuesto' as const, cantidad: r.cantidad, precio_unitario: r.precio_unitario, iva_porcentaje: 19 })),
-    ];
+    // Liquida sobre lo que REALMENTE se cobró (lineas_cobro, calculado y guardado en
+    // recibirReparacionTerminada a partir de mano_obra_realizada/partes_usadas), no sobre la
+    // cotización original: el taller puede terminar usando menos repuestos de los cotizados.
+    const lineas = pago.lineas_cobro as LineaParaCalculo[];
     const parametrosActuales = await this.parametros.actuales();
     const liquidacion = this.dinero.liquidar(
       { lineas, pagador: { tipo: 'cliente', retenedor: false }, total_a_pagar: pago.valor },
