@@ -19,6 +19,7 @@ import { ParametrosService } from './negocio/parametros.service.js';
 import { ProveedoresService } from './negocio/proveedores.service.js';
 import { VentasService } from './negocio/ventas.service.js';
 import { WebhookPasarelaController } from './negocio/webhook-pasarela.controller.js';
+import { DashboardController } from './dashboard/dashboard.controller.js';
 import { PanelController } from './panel/panel.controller.js';
 import { SaludController } from './salud.controller.js';
 import { ClienteTallerReal } from './facturacion/cliente-taller.js';
@@ -37,7 +38,7 @@ import { TiendaBuscadorService } from './facturacion/tienda-buscador.service.js'
   ],
   controllers: [
     SaludController, OauthController, McpController, BitacoraController, WebhookPasarelaController, AgentesController,
-    McpFacturacionController, FacturacionSandboxController, PanelController,
+    McpFacturacionController, FacturacionSandboxController, PanelController, DashboardController,
   ],
   providers: [
     HerramientasService, BitacoraService, DineroService, ParametrosService, ProveedoresService, VentasService,
