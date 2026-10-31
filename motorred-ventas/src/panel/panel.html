@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panel de logs · MotorRed</title>
+<style>
+  :root {
+    --bg:#f6f7f9; --panel:#fff; --borde:#e2e5ea; --texto:#1c2430; --suave:#6b7686;
+    --acento:#2a5bd7; --ok:#1a7f4b; --mal:#c0392b; --aviso:#b7791f; --sel:#eaf0ff; --codigo:#f1f3f6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:#0f1318; --panel:#171d25; --borde:#2a323d; --texto:#e6eaf0; --suave:#8b97a8;
+      --acento:#6c9cff; --ok:#4cc38a; --mal:#ff7b6b; --aviso:#e0b04a; --sel:#1d2a44; --codigo:#10151b;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg:#0f1318; --panel:#171d25; --borde:#2a323d; --texto:#e6eaf0; --suave:#8b97a8;
+    --acento:#6c9cff; --ok:#4cc38a; --mal:#ff7b6b; --aviso:#e0b04a; --sel:#1d2a44; --codigo:#10151b;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--texto); font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  header { display:flex; flex-wrap:wrap; gap:12px 16px; align-items:center; padding:12px 16px; background:var(--panel); border-bottom:1px solid var(--borde); position:sticky; top:0; z-index:2; }
+  h1 { font-size:16px; margin:0; font-weight:650; }
+  h1 small { color:var(--suave); font-weight:400; margin-left:6px; }
+  .vivo { display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--ok); margin-right:6px; }
+  .vivo.pausa { background:var(--aviso); } .vivo.caido { background:var(--mal); }
+  .barra { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-left:auto; }
+  button, select, input { font:inherit; color:inherit; background:var(--panel); border:1px solid var(--borde); border-radius:6px; padding:5px 10px; }
+  button { cursor:pointer; } button:hover { border-color:var(--acento); }
+  button.act { background:var(--acento); border-color:var(--acento); color:#fff; }
+  input[type=search] { width:200px; }
+  .tabs { display:flex; gap:4px; padding:10px 16px 0; }
+  .tabs button { border-radius:6px 6px 0 0; border-bottom:none; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; padding:10px 16px; }
+  .chip { padding:3px 10px; border-radius:999px; font-size:12px; user-select:none; }
+  .chip.off { opacity:.4; }
+  main { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(0,1fr); gap:12px; padding:0 16px 16px; align-items:start; }
+  @media (max-width:900px) { main { grid-template-columns:1fr; } }
+  .caja { background:var(--panel); border:1px solid var(--borde); border-radius:8px; overflow:hidden; }
+  .lista { max-height:calc(100vh - 190px); overflow:auto; }
+  table { width:100%; border-collapse:collapse; }
+  th { text-align:left; font-size:12px; color:var(--suave); font-weight:500; padding:8px 10px; border-bottom:1px solid var(--borde); position:sticky; top:0; background:var(--panel); }
+  td { padding:7px 10px; border-bottom:1px solid var(--borde); vertical-align:top; }
+  tr.fila { cursor:pointer; } tr.fila:hover { background:var(--sel); } tr.fila.sel { background:var(--sel); }
+  td.hora, td.ms { color:var(--suave); white-space:nowrap; font-variant-numeric:tabular-nums; }
+  td.resumen { word-break:break-word; }
+  .dir { font-size:11px; color:var(--suave); }
+  .badge { display:inline-block; padding:1px 8px; border-radius:999px; font-size:12px; font-weight:600; white-space:nowrap; }
+  .ok { color:var(--ok); } .mal { color:var(--mal); }
+  .c-mcp-ventas { background:#e3ecff; color:#1d46a8; } .c-mcp-facturacion { background:#e2f5ea; color:#176a41; }
+  .c-facturacion { background:#fff2d6; color:#8a5d00; } .c-webhook { background:#f0e5ff; color:#5b2ea8; }
+  .c-otro { background:#eceff3; color:#4a5565; } .c-telegram { background:#d9f0fb; color:#0a5c85; }
+  .c-n8n { background:#ffe5d9; color:#a3411a; } .c-taller { background:#e8e4ff; color:#3d31a0; } .c-tienda { background:#fde4ee; color:#a3205a; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .badge[class*="c-"] { background:#232c38; color:var(--texto); }
+  }
+  :root[data-theme="dark"] .badge[class*="c-"] { background:#232c38; color:var(--texto); }
+  .detalle { padding:14px; max-height:calc(100vh - 190px); overflow:auto; position:sticky; top:70px; }
+  .detalle h2 { font-size:15px; margin:0 0 4px; word-break:break-word; }
+  .meta { color:var(--suave); font-size:12px; margin-bottom:10px; display:flex; flex-wrap:wrap; gap:4px 14px; }
+  h3 { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--suave); margin:14px 0 4px; display:flex; justify-content:space-between; align-items:center; }
+  h3 button { font-size:11px; padding:1px 8px; text-transform:none; letter-spacing:0; }
+  pre { margin:0; padding:10px; background:var(--codigo); border-radius:6px; overflow:auto; font:12px/1.45 ui-monospace,Consolas,monospace; white-space:pre-wrap; word-break:break-word; }
+  .burbuja { background:#d9f0fb; color:#0a3c57; padding:10px 12px; border-radius:12px 12px 12px 2px; max-width:92%; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .burbuja { background:#1d3a4d; color:#e6f4fb; } }
+  :root[data-theme="dark"] .burbuja { background:#1d3a4d; color:#e6f4fb; }
+  .vacio { padding:40px 16px; text-align:center; color:var(--suave); }
+  .err { color:var(--mal); font-weight:600; }
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="vivo" id="vivo"></span>Panel de logs <small>servicio: __SERVICIO__</small></h1>
+  <div class="barra">
+    <input type="search" id="buscar" placeholder="Buscar en resumen, ruta o cuerpo…">
+    <select id="estado">
+      <option value="">Todos los estados</option>
+      <option value="ok">Solo exitosos</option>
+      <option value="mal">Solo con error</option>
+    </select>
+    <button id="pausar">Pausar</button>
+    <button id="limpiar">Limpiar</button>
+    <button id="tema" title="Cambiar tema">Tema</button>
+  </div>
+</header>
+
+<div class="tabs">
+  <button id="t-trafico" class="act">Peticiones y mensajes</button>
+  <button id="t-bitacora">Bitácora de negocio</button>
+</div>
+<div class="chips" id="chips"></div>
+
+<main>
+  <section class="caja lista" id="caja-lista">
+    <table>
+      <thead id="cabecera"></thead>
+      <tbody id="cuerpo"></tbody>
+    </table>
+    <div class="vacio" id="vacio" hidden></div>
+  </section>
+  <aside class="caja detalle" id="detalle"><div class="vacio">Seleccione una fila para ver el detalle.</div></aside>
+</main>
+
+<script>
+(() => {
+  const token = new URLSearchParams(location.search).get('token');
+  const q = (p) => (token ? `${p}${p.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}` : p);
+  const ETIQUETAS = {
+    'mcp-ventas': 'MCP ventas', 'mcp-facturacion': 'MCP facturación', facturacion: 'Sandbox facturación',
+    webhook: 'Webhook', otro: 'Otro', telegram: 'Telegram', n8n: 'n8n', taller: 'Taller', tienda: 'Tienda',
+  };
+  const $ = (id) => document.getElementById(id);
+
+  let entradas = [];
+  let ultimoId = 0;
+  let pausado = false;
+  let seleccion = null;
+  let vista = 'trafico';
+  let bitacora = [];
+  const canalesOff = new Set();
+
+  // Tema
+  try { const t = localStorage.getItem('tema'); if (t) document.documentElement.dataset.theme = t; } catch {}
+  $('tema').onclick = () => {
+    const oscuro = getComputedStyle(document.body).backgroundColor === 'rgb(15, 19, 24)';
+    const nuevo = oscuro ? 'light' : 'dark';
+    document.documentElement.dataset.theme = nuevo;
+    try { localStorage.setItem('tema', nuevo); } catch {}
+  };
+
+  const el = (tag, props = {}, ...hijos) => {
+    const e = Object.assign(document.createElement(tag), props);
+    for (const h of hijos) e.append(h);
+    return e;
+  };
+  const hora = (iso) => new Date(iso).toLocaleTimeString('es-CO', { hour12: false }) + '.' + String(new Date(iso).getMilliseconds()).padStart(3, '0');
+  const json = (v) => (v === undefined ? '(sin cuerpo)' : typeof v === 'string' ? v : JSON.stringify(v, null, 2));
+  const badge = (canal) => el('span', { className: `badge c-${canal}`, textContent: ETIQUETAS[canal] ?? canal });
+
+  function pasaFiltros(e) {
+    if (canalesOff.has(e.canal)) return false;
+    const est = $('estado').value;
+    if (est === 'ok' && !e.ok) return false;
+    if (est === 'mal' && e.ok) return false;
+    const t = $('buscar').value.trim().toLowerCase();
+    if (t) {
+      const pajar = `${e.resumen} ${e.ruta ?? ''} ${e.error ?? ''} ${json(e.peticion)} ${json(e.respuesta)}`.toLowerCase();
+      if (!pajar.includes(t)) return false;
+    }
+    return true;
+  }
+
+  function pintarChips() {
+    const presentes = [...new Set(entradas.map((e) => e.canal))];
+    const cont = $('chips');
+    cont.replaceChildren();
+    if (vista !== 'trafico') return;
+    for (const c of presentes) {
+      const n = entradas.filter((e) => e.canal === c).length;
+      const chip = badge(c);
+      chip.classList.add('chip');
+      if (canalesOff.has(c)) chip.classList.add('off');
+      chip.textContent = `${ETIQUETAS[c] ?? c} · ${n}`;
+      chip.style.cursor = 'pointer';
+      chip.onclick = () => { canalesOff.has(c) ? canalesOff.delete(c) : canalesOff.add(c); pintar(); };
+      cont.append(chip);
+    }
+  }
+
+  function pintarTrafico() {
+    $('cabecera').replaceChildren(el('tr', {}, ...['Hora', 'Canal', 'Resumen', 'Estado', 'ms'].map((h) => el('th', { textContent: h }))));
+    const filas = entradas.filter(pasaFiltros).reverse();
+    const cuerpo = $('cuerpo');
+    cuerpo.replaceChildren();
+    for (const e of filas.slice(0, 600)) {
+      const tr = el('tr', { className: 'fila' + (seleccion === e.id ? ' sel' : '') });
+      tr.append(
+        el('td', { className: 'hora', textContent: hora(e.ts) }),
+        el('td', {}, badge(e.canal), el('div', { className: 'dir', textContent: e.direccion === 'entrante' ? '← entrante' : '→ saliente' })),
+        el('td', { className: 'resumen', textContent: e.resumen }),
+        el('td', { className: e.ok ? 'ok' : 'mal', textContent: e.estado ?? (e.ok ? 'OK' : 'ERROR') }),
+        el('td', { className: 'ms', textContent: e.ms ?? '' }),
+      );
+      tr.onclick = () => { seleccion = e.id; pintar(); };
+      cuerpo.append(tr);
+    }
+    $('vacio').hidden = filas.length > 0;
+    $('vacio').textContent = entradas.length ? 'Ningún registro coincide con los filtros.' : 'Aún no ha llegado ninguna petición. Cuando el MCP o la facturación reciban algo, aparecerá aquí.';
+    pintarDetalle();
+  }
+
+  function bloque(titulo, valor) {
+    const pre = el('pre', { textContent: json(valor) });
+    const copiar = el('button', { textContent: 'Copiar', onclick: () => navigator.clipboard?.writeText(pre.textContent) });
+    return [el('h3', {}, titulo, copiar), pre];
+  }
+
+  function pintarDetalle() {
+    const caja = $('detalle');
+    const e = entradas.find((x) => x.id === seleccion);
+    if (!e) { caja.replaceChildren(el('div', { className: 'vacio', textContent: 'Seleccione una fila para ver el detalle.' })); return; }
+    const hijos = [
+      el('h2', { textContent: e.resumen }),
+      el('div', { className: 'meta' },
+        el('span', { textContent: new Date(e.ts).toLocaleString('es-CO') }),
+        el('span', { textContent: e.direccion === 'entrante' ? 'Entrante' : 'Saliente' }),
+        ...(e.metodo ? [el('span', { textContent: `${e.metodo} ${e.ruta ?? ''}` })] : []),
+        ...(e.estado ? [el('span', { className: e.ok ? 'ok' : 'mal', textContent: `HTTP ${e.estado}` })] : []),
+        ...(e.ms != null ? [el('span', { textContent: `${e.ms} ms` })] : []),
+      ),
+    ];
+    if (e.error) hijos.push(el('div', { className: 'err', textContent: e.error }));
+    // Mensajes de Telegram: se ven como el cliente los recibe.
+    const msg = e.canal === 'telegram' && e.peticion && typeof e.peticion === 'object' ? e.peticion.mensaje : null;
+    if (msg) hijos.push(el('h3', { textContent: 'Mensaje al cliente' }), el('div', { className: 'burbuja', textContent: msg }));
+    hijos.push(...bloque('Petición / cuerpo', e.peticion), ...bloque('Respuesta', e.respuesta));
+    caja.replaceChildren(...hijos);
+  }
+
+  function pintarBitacora() {
+    $('cabecera').replaceChildren(el('tr', {}, ...['Hora', 'Evento', 'Traza', 'Resultado'].map((h) => el('th', { textContent: h }))));
+    const cuerpo = $('cuerpo');
+    cuerpo.replaceChildren();
+    const t = $('buscar').value.trim().toLowerCase();
+    const est = $('estado').value;
+    const filas = bitacora.filter((r) => (!t || JSON.stringify(r).toLowerCase().includes(t)) && (est === '' || (est === 'ok') === (r.ok !== false)));
+    for (const r of filas) {
+      const tr = el('tr', { className: 'fila' + (seleccion === r.ts + r.evento ? ' sel' : '') });
+      tr.append(
+        el('td', { className: 'hora', textContent: hora(r.ts) }),
+        el('td', { className: 'resumen', textContent: String(r.evento ?? r.herramienta ?? '(sin evento)') }),
+        el('td', { className: 'ms', textContent: r.traza_id ? String(r.traza_id).slice(0, 8) : '—' }),
+        el('td', { className: r.ok === false ? 'mal' : 'ok', textContent: r.ok === false ? 'ERROR' : 'OK' }),
+      );
+      tr.onclick = () => { seleccion = r.ts + r.evento; $('detalle').replaceChildren(el('h2', { textContent: String(r.evento ?? 'registro') }), ...bloque('Registro completo', r)); pintarBitacora(); };
+      cuerpo.append(tr);
+    }
+    $('vacio').hidden = filas.length > 0;
+    $('vacio').textContent = 'No hay eventos de negocio todavía.';
+  }
+
+  function pintar() {
+    pintarChips();
+    vista === 'trafico' ? pintarTrafico() : pintarBitacora();
+  }
+
+  async function traer() {
+    if (pausado) return;
+    try {
+      if (vista === 'trafico') {
+        const r = await fetch(q(`/panel/api/logs?desde=${ultimoId}`));
+        if (!r.ok) throw new Error(r.status);
+        const d = await r.json();
+        $('vivo').className = 'vivo';
+        if (d.entradas.length) { entradas = entradas.concat(d.entradas).slice(-2000); ultimoId = d.ultimo_id; pintar(); }
+      } else {
+        const r = await fetch(q('/panel/api/bitacora'));
+        if (!r.ok) throw new Error(r.status);
+        bitacora = (await r.json()).registros;
+        $('vivo').className = 'vivo';
+        pintar();
+      }
+    } catch { $('vivo').className = 'vivo caido'; }
+  }
+
+  function cambiarVista(v) {
+    vista = v; seleccion = null;
+    $('t-trafico').classList.toggle('act', v === 'trafico');
+    $('t-bitacora').classList.toggle('act', v === 'bitacora');
+    $('detalle').replaceChildren(el('div', { className: 'vacio', textContent: 'Seleccione una fila para ver el detalle.' }));
+    pintar(); traer();
+  }
+  $('t-trafico').onclick = () => cambiarVista('trafico');
+  $('t-bitacora').onclick = () => cambiarVista('bitacora');
+  $('buscar').oninput = pintar;
+  $('estado').onchange = pintar;
+  $('pausar').onclick = () => {
+    pausado = !pausado;
+    $('pausar').textContent = pausado ? 'Reanudar' : 'Pausar';
+    $('vivo').className = pausado ? 'vivo pausa' : 'vivo';
+    if (!pausado) traer();
+  };
+  $('limpiar').onclick = async () => {
+    await fetch(q('/panel/api/logs'), { method: 'DELETE' }).catch(() => {});
+    entradas = []; seleccion = null; pintar();
+  };
+
+  pintar(); traer();
+  setInterval(traer, 1500);
+})();
+</script>
+</body>
+</html>

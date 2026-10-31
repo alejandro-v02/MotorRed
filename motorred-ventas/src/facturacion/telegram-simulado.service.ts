@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { N8N } from '../config.js';
+import { redactar, registrarSaliente, registroPanel } from '../panel/registro.js';
 
 export interface AvisoCotizacion {
   cotizacion_ref: string;
@@ -30,7 +31,11 @@ export class TelegramSimuladoService {
   private async avisarN8n(url: string, payload: unknown, etiqueta: string): Promise<void> {
     if (!url) return;
     try {
-      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal: AbortSignal.timeout(10_000) });
+      const r = await registrarSaliente(
+        { canal: 'n8n', resumen: `Aviso a n8n (${etiqueta})`, metodo: 'POST', ruta: url, peticion: payload },
+        () => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal: AbortSignal.timeout(10_000) }),
+        (resp) => ({ estado: resp.status, ok: resp.ok }),
+      );
       if (!r.ok) this.logger.warn(`n8n (${etiqueta}) respondió ${r.status}`);
     } catch (e) {
       this.logger.warn(`No se pudo avisar a n8n (${etiqueta}): ${(e as Error).message}`);
@@ -39,11 +44,13 @@ export class TelegramSimuladoService {
 
   async enviarCotizacion(aviso: AvisoCotizacion): Promise<void> {
     this.logger.log(`SIMULADO Telegram → ${aviso.cliente.telefono}: ${aviso.mensaje}`);
+    registroPanel.agregar({ direccion: 'saliente', canal: 'telegram', resumen: `Cotización → ${aviso.cliente.nombre} (${aviso.cliente.telefono})`, ok: true, peticion: redactar(aviso) });
     await this.avisarN8n(N8N.webhookCotizacion, { evento: 'cotizacion_creada', ...aviso }, 'cotización');
   }
 
   async enviarPse(aviso: AvisoPago): Promise<void> {
     this.logger.log(`SIMULADO Telegram (PSE) → ${aviso.cliente.telefono}: ${aviso.mensaje}`);
+    registroPanel.agregar({ direccion: 'saliente', canal: 'telegram', resumen: `Cobro PSE → ${aviso.cliente.nombre} (${aviso.cliente.telefono})`, ok: true, peticion: redactar(aviso) });
     await this.avisarN8n(N8N.webhookPago, { evento: 'pago_pendiente', ...aviso }, 'pago');
   }
 }

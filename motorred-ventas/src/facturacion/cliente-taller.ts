@@ -1,6 +1,7 @@
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { Injectable } from '@nestjs/common';
 import { TALLER_REAL } from '../config.js';
+import { registrarSaliente } from '../panel/registro.js';
 
 const pausa = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -26,7 +27,11 @@ export class ClienteTallerReal {
     for (let intento = 0; ; intento++) {
       try {
         const mcp = await this.conectar();
-        const r = (await mcp.callTool({ name: nombre, arguments: args })) as { isError?: boolean; structuredContent?: unknown; content?: { text?: string }[] };
+        const r = await registrarSaliente(
+          { canal: 'taller', resumen: `tools/call ${nombre}${intento ? ` (reintento ${intento})` : ''}`, metodo: 'MCP', ruta: `${TALLER_REAL.url}/mcp`, peticion: args },
+          () => mcp.callTool({ name: nombre, arguments: args }) as Promise<{ isError?: boolean; structuredContent?: unknown; content?: { text?: string }[] }>,
+          (x) => ({ ok: !x.isError, respuesta: x.structuredContent ?? x.content?.[0]?.text }),
+        );
         const texto = r.content?.[0]?.text ?? '{}';
         if (!r.isError) return (r.structuredContent ?? JSON.parse(texto)) as T;
         throw new Error(`El taller rechazó ${nombre}: ${texto}`);

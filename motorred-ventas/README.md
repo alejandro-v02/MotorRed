@@ -40,6 +40,15 @@ Internamente, al confirmarse el pago, se crea una venta y se liquida con el mism
 y las mismas tablas (`ventas`, `dispersiones`, `asientos`) que ya se probaron con el contrato del
 kit — eso no cambió, solo la forma de hablar con el taller.
 
+## Panel visual de logs (`/panel`)
+
+Abra `http://localhost:3000/panel` para ver en vivo cada petición que recibe el MCP y la
+facturación (`/mcp`, `/mcp-facturacion`, sandbox, webhooks), las llamadas salientes (n8n, taller,
+tienda), los mensajes de Telegram tal como los ve el cliente y la bitácora de negocio. Filtra por
+canal, estado y texto; los campos `token`/`secret`/`clave`/`firma` se muestran como `***`. Los
+registros viven en memoria (últimos 2000) y se pierden al reiniciar. Si define `PANEL_TOKEN` en
+`.env`, abra `/panel?token=<valor>`.
+
 ## Qué trae
 
 - Las 5 herramientas MCP de ventas (`crear_venta`, `consultar_venta`, `generar_cobro`,

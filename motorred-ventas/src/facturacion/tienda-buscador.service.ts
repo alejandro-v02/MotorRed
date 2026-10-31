@@ -1,5 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { REPUESTOS_API } from '../config.js';
+import { registrarSaliente } from '../panel/registro.js';
+
+const safeJson = (b: unknown) => {
+  try {
+    return JSON.parse(String(b));
+  } catch {
+    return String(b);
+  }
+};
 
 export interface OfertaRepuesto {
   repuesto_id: string;
@@ -23,11 +32,16 @@ export class TiendaBuscadorService {
   private readonly logger = new Logger(TiendaBuscadorService.name);
 
   private async peticion(ruta: string, init?: RequestInit): Promise<Response> {
-    return fetch(`${REPUESTOS_API.url}${ruta}`, {
-      ...init,
-      headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
-      signal: AbortSignal.timeout(10_000),
-    });
+    return registrarSaliente(
+      { canal: 'tienda', resumen: `${init?.method ?? 'GET'} ${ruta}`, metodo: init?.method ?? 'GET', ruta: `${REPUESTOS_API.url}${ruta}`, peticion: init?.body ? safeJson(init.body) : undefined },
+      () =>
+        fetch(`${REPUESTOS_API.url}${ruta}`, {
+          ...init,
+          headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+          signal: AbortSignal.timeout(10_000),
+        }),
+      (r) => ({ estado: r.status, ok: r.ok }),
+    );
   }
 
   // Precio y disponibilidad. Solo lectura: no reserva nada (eso es decisión de negocio, se hace
