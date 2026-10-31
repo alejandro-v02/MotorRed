@@ -1,0 +1,36 @@
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[NestFactory] [39m[32mStarting Nest application...[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mTypeOrmModule dependencies initialized[39m[38;5;3m +55ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mJwtModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mTypeOrmCoreModule dependencies initialized[39m[38;5;3m +23ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mTypeOrmModule dependencies initialized[39m[38;5;3m +0ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[InstanceLoader] [39m[32mAppModule dependencies initialized[39m[38;5;3m +1ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mSaludController {/salud}:[39m[38;5;3m +5ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/salud, GET} route[39m[38;5;3m +2ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mOauthController {/oauth}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/oauth/token, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mMcpController {/mcp}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/mcp, ALL} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mBitacoraController {/bitacora}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/bitacora, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mWebhookPasarelaController {/webhooks/pasarela}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/webhooks/pasarela, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mAgentesController {/internos}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/internos/cobro/pendientes, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/internos/cobro/:venta_id/recordatorio, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/internos/conciliacion, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/internos/cierre-contable, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/internos/liquidacion/:venta_id/explicacion, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mFacturacionController {/internos}:[39m[38;5;3m +0ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/internos/cotizaciones/:codigo, GET} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/internos/cotizaciones/:codigo/respuesta, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/internos/cotizaciones/:codigo/nuevo-cobro, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/internos/cotizaciones/:codigo/cancelar, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/internos/cotizaciones/vencer, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/internos/notificaciones, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/internos/mensajes, GET} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/internos/mensajes/:id/reintentar, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/internos/eventos-venta, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/internos/sandbox/reabastecer, POST} route[39m[38;5;3m +0ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/internos/sandbox/cambiar-precio, POST} route[39m[38;5;3m +1ms[39m
+[32m[Nest] 15284  - [39m31/10/2026, 8:15:40 a.m. [32m    LOG[39m [38;5;3m[NestApplication] [39m[32mNest application successfully started[39m[38;5;3m +1ms[39m
+Servicio ventas de MotorRed en http://localhost:3010
