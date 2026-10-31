@@ -81,6 +81,13 @@ export const TALLER_REAL = {
   token: v('MCP_TALLER_TOKEN', 'lab-taller-token-cambie-esto'),
 };
 
+// Automatización de Telegram vía n8n (ver docs/contratos-reales/mcp-taller.md, punto 3). Si no
+// se configuran, TelegramSimuladoService solo deja el registro de siempre (nada se rompe).
+export const N8N = {
+  webhookCotizacion: v('N8N_WEBHOOK_COTIZACION', ''),
+  webhookPago: v('N8N_WEBHOOK_PAGO', ''),
+};
+
 // Modelo de embeddings para el RAG (Actividad 4.4). Por defecto, el de Ollama local.
 export const RAG = {
   ollamaUrl: v('OLLAMA_URL', 'http://localhost:11434'),

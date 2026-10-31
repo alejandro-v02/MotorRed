@@ -1,0 +1,105 @@
+{
+  "name": "MotorRed - Cotización por Telegram",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "motorred-cotizacion",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "webhook-cotizacion",
+      "name": "Webhook Cotización",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "motorred-cotizacion"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Edite este mapa antes de probar: el chat_id se obtiene escribiéndole /start al bot y\n// mirando el log del nodo Telegram Trigger, o con @userinfobot.\nconst TELEFONO_A_CHAT_ID = {\n  '3009998877': 123456789, // Marta Gil (ejemplo del Instructivo 5) -> reemplazar\n};\nconst datos = items[0].json.body ?? items[0].json;\nconst chat_id = TELEFONO_A_CHAT_ID[datos.cliente.telefono];\nif (!chat_id) throw new Error(`Sin chat_id para el teléfono ${datos.cliente.telefono}: agréguelo al mapa del nodo de Código.`);\nreturn [{ json: { ...datos, chat_id } }];"
+      },
+      "id": "code-mapear-chat-id",
+      "name": "Código: mapear chat_id",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.mensaje }}\n\n(cotizacion_ref: {{ $json.cotizacion_ref }})",
+        "additionalFields": {}
+      },
+      "id": "telegram-enviar-cotizacion",
+      "name": "Enviar Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [680, 300],
+      "credentials": {
+        "telegramApi": { "id": "REEMPLAZAR_CON_SU_CREDENCIAL", "name": "Bot MotorRed" }
+      }
+    },
+    {
+      "parameters": {
+        "updates": ["message"]
+      },
+      "id": "telegram-trigger-respuesta",
+      "name": "Telegram: respuesta del cliente",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1,
+      "position": [240, 520],
+      "credentials": {
+        "telegramApi": { "id": "REEMPLAZAR_CON_SU_CREDENCIAL", "name": "Bot MotorRed" }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Recupera el último cotizacion_ref que le mandamos a este chat_id (memoria del workflow).\nconst datos = $getWorkflowStaticData('global');\nconst chat_id = items[0].json.message.chat.id;\nconst texto = String(items[0].json.message.text ?? '').trim().toLowerCase();\nconst cotizacion_ref = datos[`cot_${chat_id}`];\nif (!cotizacion_ref) throw new Error(`No hay una cotización pendiente registrada para el chat ${chat_id}.`);\nconst aceptada = ['si', 'sí', 'yes', 'acepto'].includes(texto);\nreturn [{ json: { cotizacion_ref, aceptada, texto_original: texto } }];"
+      },
+      "id": "code-interpretar-respuesta",
+      "name": "Código: interpretar SÍ/NO",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 520]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=http://localhost:3000/facturacion/sandbox/telegram/{{ $json.cotizacion_ref }}/responder",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { aceptada: $json.aceptada } }}",
+        "options": {}
+      },
+      "id": "http-responder",
+      "name": "Avisar a MotorRed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 520]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Guarda qué cotización le mandamos a cada chat_id, para interpretar la respuesta después.\nconst datos = $getWorkflowStaticData('global');\ndatos[`cot_${items[0].json.chat_id}`] = items[0].json.cotizacion_ref;\nreturn items;"
+      },
+      "id": "code-recordar-envio",
+      "name": "Código: recordar envío",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 180]
+    }
+  ],
+  "connections": {
+    "Webhook Cotización": { "main": [[{ "node": "Código: mapear chat_id", "type": "main", "index": 0 }]] },
+    "Código: mapear chat_id": {
+      "main": [[
+        { "node": "Enviar Telegram", "type": "main", "index": 0 },
+        { "node": "Código: recordar envío", "type": "main", "index": 0 }
+      ]]
+    },
+    "Telegram: respuesta del cliente": { "main": [[{ "node": "Código: interpretar SÍ/NO", "type": "main", "index": 0 }]] },
+    "Código: interpretar SÍ/NO": { "main": [[{ "node": "Avisar a MotorRed", "type": "main", "index": 0 }]] }
+  }
+}

@@ -74,11 +74,13 @@ export class FacturacionService {
     );
     await this.marcarProcesado(args.id_mensaje, 'crear_cotizacion', args.codigo);
 
-    await this.telegram.enviarCotizacion(
-      args.cliente.telefono,
-      `Hola ${args.cliente.nombre}, tu cotización para ${args.vehiculo.descripcion} (placa ${args.vehiculo.placa}) es de ` +
-        `$${(total_mano_obra_cliente + total_repuestos_cliente).toLocaleString('es-CO')}. ${mensaje_garantia} Responde SÍ o NO.`,
-    );
+    const total_a_pagar = total_mano_obra_cliente + total_repuestos_cliente;
+    await this.telegram.enviarCotizacion({
+      cotizacion_ref, codigo: args.codigo, cliente: args.cliente, total_a_pagar,
+      mensaje:
+        `Hola ${args.cliente.nombre}, tu cotización para ${args.vehiculo.descripcion} (placa ${args.vehiculo.placa}) es de ` +
+        `$${total_a_pagar.toLocaleString('es-CO')}. ${mensaje_garantia} Responde SÍ o NO.`,
+    });
     this.logger.log(`Cotización ${cotizacion_ref} (orden ${args.codigo}) creada: mano de obra cliente $${total_mano_obra_cliente}, repuestos cliente $${total_repuestos_cliente}`);
     return { recibido: true };
   }
@@ -156,7 +158,10 @@ export class FacturacionService {
 
     const cliente = c.cliente as { telefono: string; nombre: string };
     const url = await this.pse.enlacePago(referencia_pse, totales.total);
-    await this.telegram.enviarPse(cliente.telefono, `Hola ${cliente.nombre}, tu reparación (orden ${args.codigo}) está lista. Total a pagar: $${totales.total.toLocaleString('es-CO')}. Paga aquí: ${url}`);
+    await this.telegram.enviarPse({
+      cotizacion_ref: args.cotizacion_ref, codigo: args.codigo, cliente, referencia_pse, valor: totales.total, url_pago: url,
+      mensaje: `Hola ${cliente.nombre}, tu reparación (orden ${args.codigo}) está lista. Total a pagar: $${totales.total.toLocaleString('es-CO')}. Paga aquí: ${url}`,
+    });
     this.logger.log(`Reparación terminada, orden ${args.codigo}: PSE ${referencia_pse} por $${totales.total}`);
     return { recibido: true };
   }

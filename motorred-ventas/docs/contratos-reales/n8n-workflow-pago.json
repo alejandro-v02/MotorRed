@@ -1,0 +1,50 @@
+{
+  "name": "MotorRed - Aviso de pago por Telegram",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "motorred-pago",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "webhook-pago",
+      "name": "Webhook Pago",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "motorred-pago"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Mismo mapa que en el workflow de cotización: manténgalos sincronizados, o reemplace los dos\n// por un nodo de credencial/lookup compartido (p. ej. un Google Sheet) si va a usar varios números.\nconst TELEFONO_A_CHAT_ID = {\n  '3009998877': 123456789, // Marta Gil (ejemplo del Instructivo 5) -> reemplazar\n};\nconst datos = items[0].json.body ?? items[0].json;\nconst chat_id = TELEFONO_A_CHAT_ID[datos.cliente.telefono];\nif (!chat_id) throw new Error(`Sin chat_id para el teléfono ${datos.cliente.telefono}: agréguelo al mapa del nodo de Código.`);\nreturn [{ json: { ...datos, chat_id } }];"
+      },
+      "id": "code-mapear-chat-id-pago",
+      "name": "Código: mapear chat_id",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
+        "chatId": "={{ $json.chat_id }}",
+        "text": "={{ $json.mensaje }}",
+        "additionalFields": {}
+      },
+      "id": "telegram-enviar-pago",
+      "name": "Enviar Telegram (pago)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [680, 300],
+      "credentials": {
+        "telegramApi": { "id": "REEMPLAZAR_CON_SU_CREDENCIAL", "name": "Bot MotorRed" }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook Pago": { "main": [[{ "node": "Código: mapear chat_id", "type": "main", "index": 0 }]] },
+    "Código: mapear chat_id": { "main": [[{ "node": "Enviar Telegram (pago)", "type": "main", "index": 0 }]] }
+  }
+}
