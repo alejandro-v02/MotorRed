@@ -4,7 +4,7 @@ import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/cli
 
 const BASE = process.argv[2] ?? 'http://localhost:3000';
 const URL_FACTURACION = `${BASE}/mcp-facturacion`;
-const TOKEN = process.env.MCP_FACTURACION_TOKEN ?? 'lab-facturacion-token-cambie-esto';
+const TOKEN = process.env.MCP_FACTURACION_TOKEN ?? 'token_facturacion_mcp';
 
 const cliente = new Client({ name: 'taller-real-simulado', version: '1.0.0' }, { versionNegotiation: { mode: 'auto' } });
 await cliente.connect(new StreamableHTTPClientTransport(new URL(URL_FACTURACION), { requestInit: { headers: { Authorization: `Bearer ${TOKEN}` } } }));

@@ -9,7 +9,7 @@
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 const cotizacion_ref = process.argv[2];
 const BASE = process.argv[3] ?? 'http://localhost:3000';
-const TOKEN = process.env.MCP_FACTURACION_TOKEN ?? 'lab-facturacion-token-cambie-esto';
+const TOKEN = process.env.MCP_FACTURACION_TOKEN ?? 'token_facturacion_mcp';
 if (!cotizacion_ref) {
   console.error('Uso: node pruebas/probar-reparacion-parcial.mjs <cotizacion_ref> [http://localhost:3000]');
   process.exit(1);

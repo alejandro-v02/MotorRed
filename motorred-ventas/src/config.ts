@@ -74,7 +74,7 @@ export const DB = {
 // MCP_<DESTINO>_URL / MCP_<DESTINO>_TOKEN que ya usa el taller para sus propias llamadas salientes.
 export const TALLER_REAL = {
   // Token que el taller debe presentar al llamarnos (Authorization: Bearer <...>).
-  tokenEntrante: v('MCP_FACTURACION_TOKEN', 'lab-facturacion-token-cambie-esto'),
+  tokenEntrante: v('MCP_FACTURACION_TOKEN', 'token_facturacion_mcp'),
   // Dirección y token del MCP del taller, para nuestras llamadas de vuelta
   // (registrar_respuesta_cliente, registrar_pago).
   url: v('MCP_TALLER_URL', 'http://localhost:3001'),
