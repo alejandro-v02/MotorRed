@@ -1,7 +1,14 @@
+// node pruebas/probar-reparacion.mjs <cotizacion_ref> [http://localhost:3000]
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 const cotizacion_ref = process.argv[2];
+const BASE = process.argv[3] ?? 'http://localhost:3000';
+const TOKEN = process.env.MCP_FACTURACION_TOKEN ?? 'lab-facturacion-token-cambie-esto';
+if (!cotizacion_ref) {
+  console.error('Uso: node pruebas/probar-reparacion.mjs <cotizacion_ref> [http://localhost:3000]');
+  process.exit(1);
+}
 const cliente = new Client({ name: 'x', version: '1.0.0' }, { versionNegotiation: { mode: 'auto' } });
-await cliente.connect(new StreamableHTTPClientTransport(new URL('http://localhost:3002/mcp-facturacion'), { requestInit: { headers: { Authorization: 'Bearer lab-facturacion-token-prueba' } } }));
+await cliente.connect(new StreamableHTTPClientTransport(new URL(`${BASE}/mcp-facturacion`), { requestInit: { headers: { Authorization: `Bearer ${TOKEN}` } } }));
 const r = await cliente.callTool({
   name: 'notificar_reparacion_terminada',
   arguments: {

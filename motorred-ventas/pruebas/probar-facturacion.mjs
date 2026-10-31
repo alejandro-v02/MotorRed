@@ -1,9 +1,10 @@
 // Prueba de punta a punta de la nueva integración con el taller real (ver ADR 0003).
-//   node pruebas/probar-facturacion.mjs
+//   node pruebas/probar-facturacion.mjs [http://localhost:3000]
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 
-const URL_FACTURACION = 'http://localhost:3002/mcp-facturacion';
-const TOKEN = 'lab-facturacion-token-prueba';
+const BASE = process.argv[2] ?? 'http://localhost:3000';
+const URL_FACTURACION = `${BASE}/mcp-facturacion`;
+const TOKEN = process.env.MCP_FACTURACION_TOKEN ?? 'lab-facturacion-token-cambie-esto';
 
 const cliente = new Client({ name: 'taller-real-simulado', version: '1.0.0' }, { versionNegotiation: { mode: 'auto' } });
 await cliente.connect(new StreamableHTTPClientTransport(new URL(URL_FACTURACION), { requestInit: { headers: { Authorization: `Bearer ${TOKEN}` } } }));
@@ -28,6 +29,6 @@ console.log('Respuesta (acuse):', r1.structuredContent);
 // Buscar la cotización recién creada en la base de datos vía el endpoint interno no existe aún,
 // así que la consultamos directo (igual que haría cualquiera revisando el log del servicio).
 console.log('\nRevisa el log del servicio para ver "cotizacion_ref" y el log del taller-falso para la respuesta.');
-console.log('Sigue con: curl -X POST http://localhost:3002/facturacion/sandbox/telegram/<cotizacion_ref>/responder -H "Content-Type: application/json" -d \'{"aceptada":true}\'');
+console.log(`Sigue con: curl -X POST ${BASE}/facturacion/sandbox/telegram/<cotizacion_ref>/responder -H "Content-Type: application/json" -d '{"aceptada":true}'`);
 
 await cliente.close();
