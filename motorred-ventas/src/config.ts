@@ -88,6 +88,20 @@ export const N8N = {
   webhookPago: v('N8N_WEBHOOK_PAGO', ''),
 };
 
+// API REAL del concesionario/tienda de repuestos (ver
+// docs/contratos-reales/documentacion-api-repuestos.xlsx). Es la API REST (sin autenticación,
+// según su propio documento), no el MCP: el MCP está pensado para un agente conversacional
+// (exige confirmado=true "solo tras que el usuario confirme explícitamente"), que no aplica a
+// una llamada de servicio a servicio como esta. 3002 por defecto para no chocar con nuestro
+// propio PUERTO (3000) en una máquina de desarrollo; ajustar a donde ese grupo lo despliegue.
+export const REPUESTOS_API = {
+  url: v('URL_REPUESTOS', 'http://localhost:3002'),
+  bodega: v('REPUESTOS_BODEGA', 'PRINCIPAL'),
+  // Nombre que reportamos como "tienda" en orden_compra hacia el taller: su API no modela varias
+  // tiendas, es un solo concesionario.
+  nombre: v('REPUESTOS_NOMBRE', 'Concesionario (repuestos)'),
+};
+
 // Modelo de embeddings para el RAG (Actividad 4.4). Por defecto, el de Ollama local.
 export const RAG = {
   ollamaUrl: v('OLLAMA_URL', 'http://localhost:11434'),

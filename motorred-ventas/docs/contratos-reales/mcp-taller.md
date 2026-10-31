@@ -59,10 +59,12 @@ y no le interesa al taller — por eso seguimos usando `DineroService`, `ventas`
 
 ## Lo que todavía no sabemos (bloqueante para una integración real, no para avanzar la lógica)
 
-1. **Contrato real de tienda (José) y concesionario (Emerson)**: no tenemos un documento como
-   este para pedirles precio por `codigo_repuesto`. Mientras tanto, `TiendaBuscadorService` usa un
-   catálogo simulado (`src/facturacion/tienda-buscador.service.ts`), reemplazable cuando llegue el
-   contrato real.
+1. **Contrato real de tienda (José) y concesionario (Emerson)**: RESUELTO el 2026-10-31 — recibimos
+   `docs/contratos-reales/documentacion-api-repuestos.xlsx` (API real del concesionario) y
+   `TiendaBuscadorService` ya llama su API de verdad (precio, stock, reserva, consumo). Punto
+   pendiente de confirmar con ellos: su catálogo identifica repuestos por `id`/`sku`, no por
+   `codigo_repuesto`; asumimos que su `sku` es igual al `codigo_repuesto` del taller (ver el
+   comentario al inicio de `tienda-buscador.service.ts`).
 2. **PSE**: no hay pasarela real ni simulada definida para este flujo (el PSE no es la pasarela
    simulada del kit). Se simula en `src/facturacion/pse-simulado.service.ts`, con una ruta de
    laboratorio para confirmar el pago a mano, igual que hace el kit con su pasarela.

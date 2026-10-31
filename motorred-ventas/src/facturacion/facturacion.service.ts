@@ -51,12 +51,14 @@ export class FacturacionService {
     const total_mano_obra_cliente = args.mano_obra.filter((l) => !l.garantia.valida).reduce((s, l) => s + l.precio, 0);
     const hay_repuestos = args.repuestos.length > 0;
 
-    // Precio de cada repuesto, buscado en las tiendas (SIMULADO: ver TiendaBuscadorService).
+    // Precio y disponibilidad de cada repuesto, consultados en la API real del concesionario
+    // (ver TiendaBuscadorService y docs/contratos-reales/documentacion-api-repuestos.xlsx). Solo
+    // consulta: no reserva nada todavía, eso se hace si el cliente acepta.
     let total_repuestos_cliente = 0;
-    const repuestosConPrecio: Array<{ linea: (typeof args.repuestos)[number]; tienda: string; precio_unitario: number }> = [];
+    const repuestosConPrecio: Array<{ linea: (typeof args.repuestos)[number]; tienda: string; precio_unitario: number; repuesto_id: string }> = [];
     for (const l of args.repuestos) {
-      const oferta = await this.tiendas.buscar(l.codigo_repuesto);
-      repuestosConPrecio.push({ linea: l, tienda: oferta.tienda, precio_unitario: oferta.precio_unitario });
+      const oferta = await this.tiendas.buscar(l.codigo_repuesto, l.cantidad);
+      repuestosConPrecio.push({ linea: l, tienda: oferta.tienda, precio_unitario: oferta.precio_unitario, repuesto_id: oferta.repuesto_id });
       if (!l.garantia.valida) total_repuestos_cliente += oferta.precio_unitario * l.cantidad;
     }
 
@@ -68,7 +70,7 @@ export class FacturacionService {
       [
         cotizacion_ref, args.codigo, args.id_relacion, args.taller, args.sede,
         JSON.stringify(args.cliente), JSON.stringify(args.vehiculo), JSON.stringify(args.mano_obra),
-        JSON.stringify(repuestosConPrecio.map((r) => ({ ...r.linea, tienda: r.tienda, precio_unitario: r.precio_unitario }))),
+        JSON.stringify(repuestosConPrecio.map((r) => ({ ...r.linea, tienda: r.tienda, precio_unitario: r.precio_unitario, repuesto_id: r.repuesto_id }))),
         total_mano_obra, total_mano_obra_cliente, total_repuestos_cliente, hay_repuestos, mensaje_garantia, args.id_mensaje,
       ],
     );
@@ -99,13 +101,26 @@ export class FacturacionService {
     if (!c) throw new Error(`No existe la cotización ${cotizacion_ref}`);
     if (c.estado !== 'pendiente_respuesta') throw new Error(`La cotización ${cotizacion_ref} ya está ${c.estado}`);
 
-    const repuestos = c.repuestos as Array<{ codigo_repuesto: string; descripcion: string; cantidad: number; tienda: string; precio_unitario: number; garantia: { valida: boolean; pagador: string } }>;
+    const repuestos = c.repuestos as Array<{ codigo_repuesto: string; descripcion: string; cantidad: number; tienda: string; precio_unitario: number; repuesto_id: string; garantia: { valida: boolean; pagador: string } }>;
     const orden_compra: OrdenCompraLinea[] = aceptada
       ? repuestos.map((r) => ({
           codigo_repuesto: r.codigo_repuesto, cantidad: r.cantidad, tienda: r.tienda, precio_unitario: r.precio_unitario,
           pagador: (r.garantia.valida ? r.garantia.pagador : 'cliente') as OrdenCompraLinea['pagador'],
         }))
       : [];
+
+    // Reserva en el concesionario (no baja el físico todavía, solo el disponible). Si falla,
+    // no se detiene el negocio: ya se le avisó al cliente y al taller que se aceptó. Se deja
+    // registrado en el log para seguimiento manual (ver TiendaBuscadorService).
+    if (aceptada) {
+      for (const r of repuestos) {
+        try {
+          await this.tiendas.reservar(r.repuesto_id, r.cantidad, cotizacion_ref, `Cotización aceptada, orden ${c.codigo}`);
+        } catch (e) {
+          this.logger.error(`No se pudo reservar ${r.cantidad}x ${r.codigo_repuesto} para ${cotizacion_ref}: ${(e as Error).message}`);
+        }
+      }
+    }
 
     await this.db.query(
       `UPDATE cotizaciones SET estado = $1, motivo_rechazo = $2, orden_compra = $3 WHERE cotizacion_ref = $4`,
@@ -132,6 +147,24 @@ export class FacturacionService {
     const c = filas[0];
     if (!c) throw new Error(`No existe la cotización ${args.cotizacion_ref}`);
     const ordenCompra = (c.orden_compra ?? []) as OrdenCompraLinea[];
+
+    // Cierra las reservas del concesionario: lo que el taller dice que sí se usó se consume
+    // (baja el físico), lo que quedó reservado de más se libera. Best-effort: un fallo aquí no
+    // debe bloquear el cobro al cliente, que es la responsabilidad central de Ventas.
+    const repuestosCotizados = (c.repuestos ?? []) as Array<{ codigo_repuesto: string; repuesto_id: string; cantidad: number }>;
+    for (const o of ordenCompra) {
+      const cotizado = repuestosCotizados.find((r) => r.codigo_repuesto === o.codigo_repuesto);
+      if (!cotizado) continue;
+      const cantidadUsada = args.partes_usadas.find((p) => p.codigo_repuesto === o.codigo_repuesto)?.cantidad ?? 0;
+      try {
+        if (cantidadUsada > 0) await this.tiendas.confirmarConsumo(cotizado.repuesto_id, cantidadUsada, args.codigo);
+        if (cantidadUsada < cotizado.cantidad) {
+          await this.tiendas.liberarReserva(cotizado.repuesto_id, cotizado.cantidad - cantidadUsada, args.codigo, 'Repuesto reservado pero no usado en la reparación');
+        }
+      } catch (e) {
+        this.logger.error(`No se pudo cerrar la reserva de ${o.codigo_repuesto} para ${args.codigo}: ${(e as Error).message}`);
+      }
+    }
 
     // Lo que paga el cliente: servicios realizados cuyo pagador es "cliente" + repuestos
     // comprados cuyo pagador es "cliente" (emparejados por codigo_repuesto con la orden de
