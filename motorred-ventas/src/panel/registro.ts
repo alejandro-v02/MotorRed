@@ -12,7 +12,8 @@ export type Canal =
   | 'telegram' // mensaje armado para el cliente (vía n8n)
   | 'n8n'
   | 'taller' // nuestras llamadas MCP al taller
-  | 'tienda'; // API del concesionario
+  | 'tienda' // agente de repuestos (hablar_con_repuestos)
+  | 'agente'; // decisiones de nuestro agente de facturación
 
 export interface EntradaLog {
   id: number;

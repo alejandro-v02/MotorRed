@@ -22,6 +22,7 @@ import { WebhookPasarelaController } from './negocio/webhook-pasarela.controller
 import { DashboardController } from './dashboard/dashboard.controller.js';
 import { PanelController } from './panel/panel.controller.js';
 import { SaludController } from './salud.controller.js';
+import { AgenteFacturacionService } from './facturacion/agente-facturacion.service.js';
 import { ClienteTallerReal } from './facturacion/cliente-taller.js';
 import { FacturacionSandboxController } from './facturacion/facturacion-sandbox.controller.js';
 import { FacturacionService } from './facturacion/facturacion.service.js';
@@ -44,6 +45,7 @@ import { TiendaBuscadorService } from './facturacion/tienda-buscador.service.js'
     HerramientasService, BitacoraService, DineroService, ParametrosService, ProveedoresService, VentasService,
     RagService, AgenteRiesgoService, AgenteCobroService, AgenteConciliacionService, AgenteContableService,
     FacturacionService, TiendaBuscadorService, TelegramSimuladoService, PseSimuladoService, ClienteTallerReal,
+    AgenteFacturacionService,
   ],
 })
 export class AppModule {}

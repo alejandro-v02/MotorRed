@@ -88,18 +88,14 @@ export const N8N = {
   webhookPago: v('N8N_WEBHOOK_PAGO', ''),
 };
 
-// API REAL del concesionario/tienda de repuestos (ver
-// docs/contratos-reales/documentacion-api-repuestos.xlsx). Es la API REST (sin autenticación,
-// según su propio documento), no el MCP: el MCP está pensado para un agente conversacional
-// (exige confirmado=true "solo tras que el usuario confirme explícitamente"), que no aplica a
-// una llamada de servicio a servicio como esta. 3002 por defecto para no chocar con nuestro
-// propio PUERTO (3000) en una máquina de desarrollo; ajustar a donde ese grupo lo despliegue.
-export const REPUESTOS_API = {
-  url: v('URL_REPUESTOS', 'http://localhost:3002'),
-  bodega: v('REPUESTOS_BODEGA', 'PRINCIPAL'),
-  // Nombre que reportamos como "tienda" en orden_compra hacia el taller: su API no modela varias
-  // tiendas, es un solo concesionario.
-  nombre: v('REPUESTOS_NOMBRE', 'Concesionario (repuestos)'),
+// MCP de la tienda/concesionario de repuestos. Hablamos con SU AGENTE por la herramienta
+// hablar_con_repuestos (cotizar, apartar, entregar, pagar, cancelar por mensaje); ya no llamamos
+// su API REST (/api/stock/...), que ese grupo va a cerrar. Su agente tarda de 10 a 25 s con el
+// modelo local: ellos piden un timeout de al menos 60 s.
+export const REPUESTOS_MCP = {
+  url: v('MCP_REPUESTOS_URL', 'http://localhost:3100/mcp'),
+  token: v('MCP_REPUESTOS_TOKEN', 'dev-mcp-token'),
+  timeoutMs: n('MCP_REPUESTOS_TIMEOUT_MS', 90_000),
 };
 
 // Modelo de embeddings para el RAG (Actividad 4.4). Por defecto, el de Ollama local.
@@ -108,4 +104,17 @@ export const RAG = {
   modeloEmbedding: v('EMBED_MODELO', 'nomic-embed-text'),
   dimensiones: n('EMBED_DIMENSIONES', 768),
   modeloChat: v('LLM_MODELO', 'qwen2.5:7b'),
+};
+
+// Agente de facturación (decide qué decirle a repuestos y cuándo avisar al taller). Usa cualquier
+// API compatible con OpenAI: Ollama local (…/v1) o un proveedor en la nube. Responde con JSON
+// validado, así que NO exige herramientas nativas (gemma3:4b no las tiene). AGENTE_FACTURACION=no
+// o un modelo que no responde → todo lo hace el código (plan B), como antes.
+export const AGENTE_LLM = {
+  activo: v('AGENTE_FACTURACION', 'si') !== 'no',
+  url: v('LLM_URL', `${RAG.ollamaUrl}/v1`).replace(/\/$/, ''),
+  llave: v('LLM_LLAVE', 'ollama'),
+  modelo: v('LLM_AGENTE_MODELO', RAG.modeloChat),
+  tiempoMs: n('LLM_AGENTE_TIEMPO_MS', 60_000),
+  maxPasos: n('LLM_AGENTE_MAX_PASOS', 5),
 };

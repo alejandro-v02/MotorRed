@@ -52,7 +52,7 @@
   .c-mcp-ventas { background:#e3ecff; color:#1d46a8; } .c-mcp-facturacion { background:#e2f5ea; color:#176a41; }
   .c-facturacion { background:#fff2d6; color:#8a5d00; } .c-webhook { background:#f0e5ff; color:#5b2ea8; }
   .c-otro { background:#eceff3; color:#4a5565; } .c-telegram { background:#d9f0fb; color:#0a5c85; }
-  .c-n8n { background:#ffe5d9; color:#a3411a; } .c-taller { background:#e8e4ff; color:#3d31a0; } .c-tienda { background:#fde4ee; color:#a3205a; }
+  .c-n8n { background:#ffe5d9; color:#a3411a; } .c-taller { background:#e8e4ff; color:#3d31a0; } .c-tienda { background:#fde4ee; color:#a3205a; } .c-agente { background:#e0f7f1; color:#0b6b57; }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) .badge[class*="c-"] { background:#232c38; color:var(--texto); }
   }
@@ -109,7 +109,7 @@
   const q = (p) => (token ? `${p}${p.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}` : p);
   const ETIQUETAS = {
     'mcp-ventas': 'MCP ventas', 'mcp-facturacion': 'MCP facturación', facturacion: 'Sandbox facturación',
-    webhook: 'Webhook', otro: 'Otro', telegram: 'Telegram', n8n: 'n8n', taller: 'Taller', tienda: 'Tienda',
+    webhook: 'Webhook', otro: 'Otro', telegram: 'Telegram', n8n: 'n8n', taller: 'Taller', tienda: 'Tienda', agente: 'Agente',
   };
   const $ = (id) => document.getElementById(id);
 

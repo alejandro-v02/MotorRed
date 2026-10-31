@@ -50,3 +50,20 @@ agente y qué decide el código.
 | **Barandas** | Nunca recalcula un valor: los toma tal cual de las tablas que `DineroService.liquidar()` ya escribió. Si los débitos no cuadran con los créditos, lo dice explícitamente en vez de inventar una explicación. |
 | **Cuándo pide un humano** | Cuando reporta ventas `en_revision` en el cierre del día: esas nunca se dispersaron y necesitan revisión. |
 | **Cómo se evalúa** | `GET /internos/cierre-contable`, `GET /internos/liquidacion/:venta_id/explicacion`, comparado contra la salida de `consultar_liquidacion`. |
+
+## Facturación (agente que coordina repuestos y taller)
+
+Código: `src/facturacion/agente-facturacion.service.ts`. Reemplaza el flujo fijo de
+`FacturacionService` por un agente que **elige la herramienta y el servicio** en cada evento.
+
+| Campo | Detalle |
+|---|---|
+| **Objetivo** | Ante un evento (cotizar, el cliente aceptó, la reparación terminó, el cliente pagó) decidir qué hacer y con quién hablar. |
+| **Herramientas que puede usar** | `hablar_con_repuestos` (le escribe en español al agente de repuestos, MCP `hablar_con_repuestos`), `avisar_taller` (`registrar_respuesta_cliente` / `registrar_pago`, con argumentos que pone el código) y `terminar`. No toca la base de datos ni calcula dinero. |
+| **Entrada** | Evento + hechos (orden, repuestos, referencia PSE) + historial de lo que ya hizo en esa corrida. |
+| **Salida (esquema zod)** | `{ razon, accion: "hablar_con_repuestos" \| "avisar_taller" \| "terminar", mensaje? }` en JSON validado (no exige herramientas nativas: `gemma3:4b` no las tiene). |
+| **Barandas** | **Cifras:** precios/cantidades/totales nunca salen del modelo (vienen de `datos[]` de repuestos o de la base). **Intención permitida:** el mensaje debe corresponder al evento (no puede "pagar" al cotizar), nombrar cada repuesto con su cantidad exacta y, en pagos, la referencia PSE. **Idempotencia:** el `id_mensaje` lo genera el código. **Límites:** 5 pasos, 60 s por decisión, una sola llamada que comprometa stock por evento. **Plan B:** si el modelo no responde, se equivoca dos veces o no hace lo requerido, el código ejecuta lo pendiente con mensajes de plantilla (el flujo anterior) usando el mismo `id_mensaje`. |
+| **Cuándo pide un humano** | No pide confirmación humana: el cliente ya aceptó/pagó antes de cada evento. Un fallo al apartar/entregar/pagar repuestos no detiene el cobro; queda en el log (ERROR) para seguimiento. |
+| **Cómo se ve** | Panel `/panel`, canal **Agente**: cada decisión, cada mensaje rechazado por las barandas y cada paso de **PLAN B**. |
+| **Configuración** | `AGENTE_FACTURACION=no` lo apaga (todo por código). `LLM_URL` (API compatible con OpenAI; por defecto Ollama `…/v1`), `LLM_LLAVE`, `LLM_AGENTE_MODELO` (por defecto `LLM_MODELO`), `LLM_AGENTE_TIEMPO_MS`, `LLM_AGENTE_MAX_PASOS`. |
+| **Cómo se evalúa** | Corridas con `gemma3:4b` y servicios simulados: 3/3 eventos resueltos por el agente sin plan B tras incluir el formato de referencia en el prompt; sin él, el modelo escribía mensajes que las barandas rechazaban y todo caía al plan B. Cotización real contra el MCP de repuestos: 33 s en total (≈12 s el modelo + ≈20 s su agente). |

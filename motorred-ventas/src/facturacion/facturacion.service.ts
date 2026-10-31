@@ -4,11 +4,12 @@ import { InjectDataSource } from '@nestjs/typeorm';
 import type { DataSource } from 'typeorm';
 import { DineroService, type LineaParaCalculo } from '../negocio/dinero.service.js';
 import { ParametrosService } from '../negocio/parametros.service.js';
+import { AgenteFacturacionService } from './agente-facturacion.service.js';
 import { ClienteTallerReal } from './cliente-taller.js';
 import type { CrearCotizacionInputT, NotificarReparacionTerminadaInputT, OrdenCompraLinea } from './esquemas.js';
 import { PseSimuladoService } from './pse-simulado.service.js';
 import { TelegramSimuladoService } from './telegram-simulado.service.js';
-import { TiendaBuscadorService } from './tienda-buscador.service.js';
+import { TiendaBuscadorService, type PedidoT } from './tienda-buscador.service.js';
 
 // Orquestador de la integración con el taller REAL (contrato propio: ver ADR 0003 y
 // docs/contratos-reales/mcp-taller.md). La contabilidad interna (DineroService, ventas,
@@ -25,6 +26,7 @@ export class FacturacionService {
     private readonly telegram: TelegramSimuladoService,
     private readonly pse: PseSimuladoService,
     private readonly clienteTaller: ClienteTallerReal,
+    private readonly agente: AgenteFacturacionService,
   ) {}
 
   // ---------------------------------------------------------------- idempotencia de entrada ----
@@ -51,15 +53,24 @@ export class FacturacionService {
     const total_mano_obra_cliente = args.mano_obra.filter((l) => !l.garantia.valida).reduce((s, l) => s + l.precio, 0);
     const hay_repuestos = args.repuestos.length > 0;
 
-    // Precio y disponibilidad de cada repuesto, consultados en la API real del concesionario
-    // (ver TiendaBuscadorService y docs/contratos-reales/documentacion-api-repuestos.xlsx). Solo
-    // consulta: no reserva nada todavía, eso se hace si el cliente acepta.
+    // Precio (sin IVA) y disponibilidad de todos los repuestos, preguntados en UN mensaje al agente
+    // de repuestos (ver TiendaBuscadorService). Solo consulta: no aparta nada todavía, eso se
+    // hace si el cliente acepta.
     let total_repuestos_cliente = 0;
-    const repuestosConPrecio: Array<{ linea: (typeof args.repuestos)[number]; tienda: string; precio_unitario: number; repuesto_id: string }> = [];
-    for (const l of args.repuestos) {
-      const oferta = await this.tiendas.buscar(l.codigo_repuesto, l.cantidad);
-      repuestosConPrecio.push({ linea: l, tienda: oferta.tienda, precio_unitario: oferta.precio_unitario, repuesto_id: oferta.repuesto_id });
-      if (!l.garantia.valida) total_repuestos_cliente += oferta.precio_unitario * l.cantidad;
+    const repuestosConPrecio: Array<{ linea: (typeof args.repuestos)[number]; tienda: string; precio_unitario: number; sku: string }> = [];
+    if (hay_repuestos) {
+      const lineasPedido = args.repuestos.map((l) => ({ codigo_repuesto: l.codigo_repuesto, cantidad: l.cantidad }));
+      const r = await this.agente.ejecutar({
+        tipo: 'cotizar', codigo_orden: args.codigo, hablar: true, repuestos: lineasPedido, repuestos_critico: true,
+        id_repuestos: `fac-${args.id_mensaje}-cotizar`,
+        hechos: { taller: args.taller, vehiculo: args.vehiculo.descripcion, repuestos_a_cotizar: lineasPedido },
+      });
+      const ofertas = this.tiendas.ofertasDesdeDatos(lineasPedido, r.datos.values(), r.respuestas.at(-1)?.respuesta);
+      for (const l of args.repuestos) {
+        const oferta = ofertas.get(l.codigo_repuesto)!;
+        repuestosConPrecio.push({ linea: l, tienda: oferta.tienda, precio_unitario: oferta.precio_unitario, sku: oferta.sku });
+        if (!l.garantia.valida) total_repuestos_cliente += oferta.precio_unitario * l.cantidad;
+      }
     }
 
     const mensaje_garantia = this.redactarMensajeGarantia(args);
@@ -70,7 +81,7 @@ export class FacturacionService {
       [
         cotizacion_ref, args.codigo, args.id_relacion, args.taller, args.sede,
         JSON.stringify(args.cliente), JSON.stringify(args.vehiculo), JSON.stringify(args.mano_obra),
-        JSON.stringify(repuestosConPrecio.map((r) => ({ ...r.linea, tienda: r.tienda, precio_unitario: r.precio_unitario, repuesto_id: r.repuesto_id }))),
+        JSON.stringify(repuestosConPrecio.map((r) => ({ ...r.linea, tienda: r.tienda, precio_unitario: r.precio_unitario, sku: r.sku }))),
         total_mano_obra, total_mano_obra_cliente, total_repuestos_cliente, hay_repuestos, mensaje_garantia, args.id_mensaje,
       ],
     );
@@ -101,7 +112,7 @@ export class FacturacionService {
     if (!c) throw new Error(`No existe la cotización ${cotizacion_ref}`);
     if (c.estado !== 'pendiente_respuesta') throw new Error(`La cotización ${cotizacion_ref} ya está ${c.estado}`);
 
-    const repuestos = c.repuestos as Array<{ codigo_repuesto: string; descripcion: string; cantidad: number; tienda: string; precio_unitario: number; repuesto_id: string; garantia: { valida: boolean; pagador: string } }>;
+    const repuestos = c.repuestos as Array<{ codigo_repuesto: string; descripcion: string; cantidad: number; tienda: string; precio_unitario: number; sku?: string; garantia: { valida: boolean; pagador: string } }>;
     const orden_compra: OrdenCompraLinea[] = aceptada
       ? repuestos.map((r) => ({
           codigo_repuesto: r.codigo_repuesto, cantidad: r.cantidad, tienda: r.tienda, precio_unitario: r.precio_unitario,
@@ -109,32 +120,34 @@ export class FacturacionService {
         }))
       : [];
 
-    // Reserva en el concesionario (no baja el físico todavía, solo el disponible). Si falla,
-    // no se detiene el negocio: ya se le avisó al cliente y al taller que se aceptó. Se deja
-    // registrado en el log para seguimiento manual (ver TiendaBuscadorService).
-    if (aceptada) {
-      for (const r of repuestos) {
-        try {
-          await this.tiendas.reservar(r.repuesto_id, r.cantidad, cotizacion_ref, `Cotización aceptada, orden ${c.codigo}`);
-        } catch (e) {
-          this.logger.error(`No se pudo reservar ${r.cantidad}x ${r.codigo_repuesto} para ${cotizacion_ref}: ${(e as Error).message}`);
-        }
-      }
-    }
-
     await this.db.query(
       `UPDATE cotizaciones SET estado = $1, motivo_rechazo = $2, orden_compra = $3 WHERE cotizacion_ref = $4`,
       [aceptada ? 'aceptada' : 'rechazada', aceptada ? null : (motivo ?? 'El cliente rechazó la cotización'), JSON.stringify(orden_compra), cotizacion_ref],
     );
 
-    await this.clienteTaller.llamar('registrar_respuesta_cliente', {
+    const avisoTaller = {
       codigo: c.codigo,
       aceptada,
       ...(aceptada ? {} : { motivo: motivo ?? 'El cliente rechazó la cotización' }),
       referencia: cotizacion_ref,
       orden_compra,
       id_mensaje: `fac-${cotizacion_ref}-respuesta`,
-    });
+    };
+    if (aceptada) {
+      // El agente decide el orden: pedirle a repuestos que aparte (solo baja el disponible, no el
+      // físico) y avisar al taller. Un fallo al apartar no detiene el negocio: ya quedó aceptada y
+      // se deja en el log para seguimiento (ver AgenteFacturacionService).
+      await this.agente.ejecutar({
+        tipo: 'aceptada', codigo_orden: c.codigo, hablar: repuestos.length > 0,
+        repuestos: repuestos.map((r) => ({ codigo_repuesto: r.codigo_repuesto, cantidad: r.cantidad })),
+        id_repuestos: `fac-${cotizacion_ref}-aceptar`,
+        taller: { herramienta: 'registrar_respuesta_cliente', args: avisoTaller },
+        hechos: { cotizacion: cotizacion_ref, el_cliente: 'aceptó la cotización', repuestos_cotizados: repuestos.map((r) => ({ codigo_repuesto: r.codigo_repuesto, cantidad: r.cantidad })) },
+      });
+    } else {
+      // Rechazada: no hay stock que mover, solo se le avisa al taller.
+      await this.clienteTaller.llamar('registrar_respuesta_cliente', avisoTaller);
+    }
     this.logger.log(`Cotización ${cotizacion_ref}: cliente ${aceptada ? 'aceptó' : 'rechazó'}. Avisado al taller.`);
   }
 
@@ -148,21 +161,23 @@ export class FacturacionService {
     if (!c) throw new Error(`No existe la cotización ${args.cotizacion_ref}`);
     const ordenCompra = (c.orden_compra ?? []) as OrdenCompraLinea[];
 
-    // Cierra las reservas del concesionario: lo que el taller dice que sí se usó se consume
-    // (baja el físico), lo que quedó reservado de más se libera. Best-effort: un fallo aquí no
-    // debe bloquear el cobro al cliente, que es la responsabilidad central de Ventas.
-    const repuestosCotizados = (c.repuestos ?? []) as Array<{ codigo_repuesto: string; repuesto_id: string; cantidad: number }>;
-    for (const o of ordenCompra) {
-      const cotizado = repuestosCotizados.find((r) => r.codigo_repuesto === o.codigo_repuesto);
-      if (!cotizado) continue;
-      const cantidadUsada = args.partes_usadas.find((p) => p.codigo_repuesto === o.codigo_repuesto)?.cantidad ?? 0;
+    // El agente le avisa a repuestos que terminamos: lo usado se entrega (y se nos vende, total con
+    // IVA) y lo apartado de más lo libera él. Best-effort: un fallo aquí no debe bloquear el cobro
+    // al cliente, que es la responsabilidad central de Ventas (el agente lo deja en el log).
+    let pedidoRepuestos: PedidoT | null = null;
+    if (ordenCompra.length > 0) {
+      const usadas = ordenCompra
+        .map((o) => ({ codigo_repuesto: o.codigo_repuesto, cantidad: args.partes_usadas.find((p) => p.codigo_repuesto === o.codigo_repuesto)?.cantidad ?? 0 }))
+        .filter((u) => u.cantidad > 0);
       try {
-        if (cantidadUsada > 0) await this.tiendas.confirmarConsumo(cotizado.repuesto_id, cantidadUsada, args.codigo);
-        if (cantidadUsada < cotizado.cantidad) {
-          await this.tiendas.liberarReserva(cotizado.repuesto_id, cotizado.cantidad - cantidadUsada, args.codigo, 'Repuesto reservado pero no usado en la reparación');
-        }
+        const r = await this.agente.ejecutar({
+          tipo: 'terminada', codigo_orden: args.codigo, hablar: true, repuestos: usadas,
+          id_repuestos: `fac-${args.id_mensaje}-entregar`,
+          hechos: { el_taller: 'terminó la reparación', repuestos_usados: usadas, repuestos_apartados: ordenCompra.map((o) => ({ codigo_repuesto: o.codigo_repuesto, cantidad: o.cantidad })) },
+        });
+        pedidoRepuestos = r.pedido;
       } catch (e) {
-        this.logger.error(`No se pudo cerrar la reserva de ${o.codigo_repuesto} para ${args.codigo}: ${(e as Error).message}`);
+        this.logger.error(`No se pudo cerrar el pedido de repuestos de ${args.codigo}: ${(e as Error).message}`);
       }
     }
 
@@ -180,6 +195,19 @@ export class FacturacionService {
     ];
     const totales = this.dinero.totales(lineasCalculo);
     const referencia_pse = this.pse.generarReferencia();
+
+    // Control cruzado: lo que la tienda dice que le debemos (total con IVA) contra lo que nosotros
+    // calculamos con sus mismos precios sin IVA. Si no cuadran, se deja en el log para revisión.
+    if (pedidoRepuestos) {
+      // La tienda nos vende TODO lo usado (también lo cubierto por garantía), no solo lo del cliente.
+      const nuestro = args.partes_usadas.reduce((s, p) => {
+        const compra = ordenCompra.find((o) => o.codigo_repuesto === p.codigo_repuesto);
+        return compra ? s + Math.round(p.cantidad * compra.precio_unitario * 1.19) : s;
+      }, 0);
+      if (Math.abs(nuestro - pedidoRepuestos.total_a_cobrar_con_iva) > 5) {
+        this.logger.warn(`Orden ${args.codigo}: la tienda nos cobra $${pedidoRepuestos.total_a_cobrar_con_iva} con IVA y nuestro cálculo de lo usado da $${nuestro}. Revisar cantidades o precios.`);
+      }
+    }
 
     await this.db.transaction(async (manager) => {
       await manager.query(
@@ -240,11 +268,14 @@ export class FacturacionService {
       await manager.query(`UPDATE cotizaciones SET venta_id = $1 WHERE cotizacion_ref = $2`, [venta_id, pago.cotizacion_ref]);
     });
 
-    await this.clienteTaller.llamar('registrar_pago', {
-      codigo: pago.codigo,
-      referencia_pse,
-      valor: pago.valor,
-      id_mensaje: `fac-${referencia_pse}-pago`,
+    // Con el pago del cliente ya recibido, el agente avisa al taller y, si la orden tuvo repuestos,
+    // le informa a la tienda que pagamos (con la referencia PSE). El orden lo decide el agente.
+    const hayRepuestos = lineas.some((l) => l.beneficiario === 'tienda');
+    await this.agente.ejecutar({
+      tipo: 'pagada', codigo_orden: pago.codigo, hablar: hayRepuestos, repuestos: [], referencia_pse,
+      id_repuestos: `fac-${referencia_pse}-pagar-repuestos`,
+      taller: { herramienta: 'registrar_pago', args: { codigo: pago.codigo, referencia_pse, valor: pago.valor, id_mensaje: `fac-${referencia_pse}-pago` } },
+      hechos: { el_cliente: 'pagó por PSE', referencia_pse, la_orden_tuvo_repuestos: hayRepuestos },
     });
     this.logger.log(`Pago ${referencia_pse} confirmado, orden ${pago.codigo}: venta interna ${venta_id} liquidada (cuadra=${liquidacion.cuadra})`);
   }
