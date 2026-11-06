@@ -13,6 +13,7 @@ export type Canal =
   | 'n8n'
   | 'taller' // nuestras llamadas MCP al taller
   | 'tienda' // agente de repuestos (hablar_con_repuestos)
+  | 'concesionario' // avisos al cliente vía AutoMax (notificar_cliente)
   | 'agente'; // decisiones de nuestro agente de facturación
 
 export interface EntradaLog {

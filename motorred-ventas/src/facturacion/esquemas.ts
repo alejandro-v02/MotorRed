@@ -98,3 +98,13 @@ export interface RegistrarPagoArgs {
   valor: number;
   id_mensaje: string;
 }
+
+// Lo que AutoMax nos llama (contrato AutoMax <-> Facturación): la respuesta del cliente por Telegram.
+export const RegistrarRespuestaCotizacionInput = z.object({
+  cotizacion_ref: z.string().max(60),
+  aceptada: z.boolean(),
+  motivo: z.string().max(500).optional(),
+  canal: z.string().optional(),
+  id_mensaje: z.string().max(120),
+});
+export type RegistrarRespuestaCotizacionInputT = z.infer<typeof RegistrarRespuestaCotizacionInput>;

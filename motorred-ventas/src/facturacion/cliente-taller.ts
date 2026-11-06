@@ -3,6 +3,9 @@ import { Injectable } from '@nestjs/common';
 import { TALLER_REAL } from '../config.js';
 import { registrarSaliente } from '../panel/registro.js';
 
+// Acepta MCP_TALLER_URL con o sin el /mcp final (el taller real publica http://host:3417/mcp).
+const URL_MCP_TALLER = TALLER_REAL.url.replace(/\/+$/, '').replace(/\/mcp$/, '') + '/mcp';
+
 const pausa = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Cliente MCP hacia el taller REAL. A diferencia de ClienteServicio (contrato del kit, OAuth
@@ -14,7 +17,7 @@ export class ClienteTallerReal {
 
   private async conectar(): Promise<Client> {
     if (this.mcp) return this.mcp;
-    const transporte = new StreamableHTTPClientTransport(new URL(`${TALLER_REAL.url}/mcp`), {
+    const transporte = new StreamableHTTPClientTransport(new URL(URL_MCP_TALLER), {
       requestInit: { headers: { Authorization: `Bearer ${TALLER_REAL.token}` } },
     });
     const mcp = new Client({ name: 'facturacion-cliente-taller', version: '1.0.0' }, { versionNegotiation: { mode: 'auto' } } as never);
@@ -28,7 +31,7 @@ export class ClienteTallerReal {
       try {
         const mcp = await this.conectar();
         const r = await registrarSaliente(
-          { canal: 'taller', resumen: `tools/call ${nombre}${intento ? ` (reintento ${intento})` : ''}`, metodo: 'MCP', ruta: `${TALLER_REAL.url}/mcp`, peticion: args },
+          { canal: 'taller', resumen: `tools/call ${nombre}${intento ? ` (reintento ${intento})` : ''}`, metodo: 'MCP', ruta: URL_MCP_TALLER, peticion: args },
           () => mcp.callTool({ name: nombre, arguments: args }) as Promise<{ isError?: boolean; structuredContent?: unknown; content?: { text?: string }[] }>,
           (x) => ({ ok: !x.isError, respuesta: x.structuredContent ?? x.content?.[0]?.text }),
         );
