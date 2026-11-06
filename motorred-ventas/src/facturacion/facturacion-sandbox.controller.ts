@@ -9,6 +9,16 @@ import { FacturacionService } from './facturacion.service.js';
 export class FacturacionSandboxController {
   constructor(private readonly facturacion: FacturacionService) {}
 
+  // Reenvía el aviso de una cotización ya guardada (ver FacturacionService.reenviarAvisoCotizacion).
+  @Post('telegram/:cotizacion_ref/reenviar')
+  async reenviarAviso(@Param('cotizacion_ref') cotizacion_ref: string) {
+    try {
+      return await this.facturacion.reenviarAvisoCotizacion(cotizacion_ref);
+    } catch (e) {
+      throw new HttpException({ error: (e as Error).message }, 400);
+    }
+  }
+
   @Post('telegram/:cotizacion_ref/responder')
   async responderTelegram(@Param('cotizacion_ref') cotizacion_ref: string, @Body() body: { aceptada: boolean; motivo?: string }) {
     try {
@@ -19,16 +29,20 @@ export class FacturacionSandboxController {
     }
   }
 
+  // Enlaces viejos (ya enviados): la pasarela ahora vive en /pagos/<referencia> (ver PagosController).
   @Get('pse/:referencia_pse/pagina')
-  verPagina(@Param('referencia_pse') referencia_pse: string, @Res() res: Response) {
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.send(`<!doctype html><html lang="es"><head><meta charset="utf-8"><title>PSE simulado</title></head>
-<body style="font-family:system-ui;max-width:420px;margin:40px auto">
-<p style="background:#fff4d6;padding:8px;border-radius:6px">PSE SIMULADO para clase. No hay pasarela real.</p>
-<h1>Referencia ${referencia_pse}</h1>
-<form method="post" action="/facturacion/sandbox/pse/${referencia_pse}/confirmar" onsubmit="event.preventDefault();fetch(this.action,{method:'POST'}).then(()=>document.body.innerHTML='<p>Pago confirmado.</p>')">
-<button type="submit">Pagar (confirmar)</button>
-</form></body></html>`);
+  redirigir(@Param('referencia_pse') referencia_pse: string, @Res() res: Response) {
+    res.redirect(302, `/pagos/${encodeURIComponent(referencia_pse)}`);
+  }
+
+  // Reenvía el aviso de pago de una reparación ya terminada (ver FacturacionService.reenviarAvisoPago).
+  @Post('pse/:referencia_pse/reenviar')
+  async reenviarAvisoPago(@Param('referencia_pse') referencia_pse: string) {
+    try {
+      return await this.facturacion.reenviarAvisoPago(referencia_pse);
+    } catch (e) {
+      throw new HttpException({ error: (e as Error).message }, 400);
+    }
   }
 
   @Post('pse/:referencia_pse/confirmar')

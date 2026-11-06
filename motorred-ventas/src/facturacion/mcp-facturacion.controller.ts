@@ -2,8 +2,8 @@ import { All, Controller, Req, Res } from '@nestjs/common';
 import { toNodeHandler } from '@modelcontextprotocol/node';
 import { McpServer, createMcpHandler } from '@modelcontextprotocol/server';
 import type { Request, Response } from 'express';
-import { TALLER_REAL } from '../config.js';
-import { Acuse, CrearCotizacionInput, NotificarReparacionTerminadaInput } from './esquemas.js';
+import { CONCESIONARIO_MCP, TALLER_REAL } from '../config.js';
+import { Acuse, CrearCotizacionInput, NotificarReparacionTerminadaInput, RegistrarRespuestaCotizacionInput } from './esquemas.js';
 import { FacturacionService } from './facturacion.service.js';
 
 // Servidor MCP de la integración con el taller REAL (ver ADR 0003). Separado de /mcp (que sigue
@@ -12,10 +12,12 @@ import { FacturacionService } from './facturacion.service.js';
 // taller ya usa para sus propias llamadas salientes — no el OAuth client_credentials del kit.
 @Controller('mcp-facturacion')
 export class McpFacturacionController {
-  private readonly atender;
+  private readonly atenderTaller;
+  private readonly atenderConcesionario;
 
   constructor(private readonly facturacion: FacturacionService) {
-    const fabrica = () => {
+    // Cada quien ve SOLO sus herramientas: el taller las suyas y AutoMax la suya, con tokens distintos.
+    const fabricaTaller = () => {
       const servidor = new McpServer({ name: 'motorred-facturacion', version: '1.0-real' });
 
       servidor.registerTool(
@@ -28,7 +30,7 @@ export class McpFacturacionController {
           annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
         },
         async (args: unknown) => {
-          const resultado = await this.facturacion.recibirCotizacion(CrearCotizacionInput.parse(args));
+          const resultado = this.facturacion.aceptarCotizacion(CrearCotizacionInput.parse(args));
           return { content: [{ type: 'text' as const, text: JSON.stringify(resultado) }], structuredContent: resultado };
         },
       );
@@ -43,24 +45,47 @@ export class McpFacturacionController {
           annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
         },
         async (args: unknown) => {
-          const resultado = await this.facturacion.recibirReparacionTerminada(NotificarReparacionTerminadaInput.parse(args));
+          const resultado = this.facturacion.aceptarReparacionTerminada(NotificarReparacionTerminadaInput.parse(args));
           return { content: [{ type: 'text' as const, text: JSON.stringify(resultado) }], structuredContent: resultado };
         },
       );
 
       return servidor;
     };
-    this.atender = toNodeHandler(createMcpHandler(fabrica as never));
+
+    const fabricaConcesionario = () => {
+      const servidor = new McpServer({ name: 'motorred-facturacion', version: '1.0-real' });
+      servidor.registerTool(
+        'registrar_respuesta_cotizacion',
+        {
+          title: 'Registrar respuesta del cliente a la cotización',
+          description: 'AutoMax nos devuelve lo que el cliente respondió por Telegram (aceptó o rechazó). Acuse inmediato; pedir repuestos y avisar al taller sigue en segundo plano. Idempotente por id_mensaje.',
+          inputSchema: RegistrarRespuestaCotizacionInput,
+          outputSchema: Acuse,
+          annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+        },
+        async (args: unknown) => {
+          const resultado = await this.facturacion.registrarRespuestaCotizacion(RegistrarRespuestaCotizacionInput.parse(args));
+          return { content: [{ type: 'text' as const, text: JSON.stringify(resultado) }], structuredContent: resultado };
+        },
+      );
+      return servidor;
+    };
+
+    this.atenderTaller = toNodeHandler(createMcpHandler(fabricaTaller as never));
+    this.atenderConcesionario = toNodeHandler(createMcpHandler(fabricaConcesionario as never));
   }
 
   @All()
   async manejar(@Req() req: Request, @Res() res: Response) {
     const [tipo, token] = String(req.headers.authorization ?? '').split(' ');
-    if (tipo !== 'Bearer' || token !== TALLER_REAL.tokenEntrante) {
+    const esTaller = tipo === 'Bearer' && token === TALLER_REAL.tokenEntrante;
+    const esConcesionario = tipo === 'Bearer' && CONCESIONARIO_MCP.tokenEntrante.length >= 16 && token === CONCESIONARIO_MCP.tokenEntrante;
+    if (!esTaller && !esConcesionario) {
       res.setHeader('WWW-Authenticate', 'Bearer');
       res.status(401).json({ error: 'Token ausente o inválido' });
       return;
     }
-    await this.atender(req as never, res, req.body);
+    await (esTaller ? this.atenderTaller : this.atenderConcesionario)(req as never, res, req.body);
   }
 }

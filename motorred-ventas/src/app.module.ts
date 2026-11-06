@@ -24,7 +24,9 @@ import { PanelController } from './panel/panel.controller.js';
 import { SaludController } from './salud.controller.js';
 import { AgenteFacturacionService } from './facturacion/agente-facturacion.service.js';
 import { ClienteTallerReal } from './facturacion/cliente-taller.js';
+import { ClienteConcesionario } from './facturacion/cliente-concesionario.js';
 import { FacturacionSandboxController } from './facturacion/facturacion-sandbox.controller.js';
+import { PagosController } from './facturacion/pagos.controller.js';
 import { FacturacionService } from './facturacion/facturacion.service.js';
 import { McpFacturacionController } from './facturacion/mcp-facturacion.controller.js';
 import { PseSimuladoService } from './facturacion/pse-simulado.service.js';
@@ -39,12 +41,12 @@ import { TiendaBuscadorService } from './facturacion/tienda-buscador.service.js'
   ],
   controllers: [
     SaludController, OauthController, McpController, BitacoraController, WebhookPasarelaController, AgentesController,
-    McpFacturacionController, FacturacionSandboxController, PanelController, DashboardController,
+    McpFacturacionController, FacturacionSandboxController, PagosController, PanelController, DashboardController,
   ],
   providers: [
     HerramientasService, BitacoraService, DineroService, ParametrosService, ProveedoresService, VentasService,
     RagService, AgenteRiesgoService, AgenteCobroService, AgenteConciliacionService, AgenteContableService,
-    FacturacionService, TiendaBuscadorService, TelegramSimuladoService, PseSimuladoService, ClienteTallerReal,
+    FacturacionService, TiendaBuscadorService, TelegramSimuladoService, PseSimuladoService, ClienteTallerReal, ClienteConcesionario,
     AgenteFacturacionService,
   ],
 })

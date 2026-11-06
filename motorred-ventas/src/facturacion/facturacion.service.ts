@@ -2,10 +2,13 @@ import { randomUUID } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import type { DataSource } from 'typeorm';
+import { MENSAJES } from '../config.js';
 import { DineroService, type LineaParaCalculo } from '../negocio/dinero.service.js';
 import { ParametrosService } from '../negocio/parametros.service.js';
 import { AgenteFacturacionService } from './agente-facturacion.service.js';
 import { ClienteTallerReal } from './cliente-taller.js';
+import type { DatosComprobante } from './comprobante-pdf.js';
+import { redactarCotizacion, type LineaManoObra, type LineaRepuesto } from './mensaje-cotizacion.js';
 import type { CrearCotizacionInputT, NotificarReparacionTerminadaInputT, OrdenCompraLinea } from './esquemas.js';
 import { PseSimuladoService } from './pse-simulado.service.js';
 import { TelegramSimuladoService } from './telegram-simulado.service.js';
@@ -41,6 +44,63 @@ export class FacturacionService {
       `INSERT INTO mensajes_procesados (id_mensaje, herramienta, codigo) VALUES ($1,$2,$3) ON CONFLICT (id_mensaje) DO NOTHING`,
       [id_mensaje, herramienta, codigo],
     );
+  }
+
+  // Acuse inmediato + trabajo en segundo plano. El taller corta a ~70 s y repuestos puede tardar más
+  // (o no responder), así que respondemos {recibido:true} al validar y seguimos solos. Un reintento
+  // con el mismo id_mensaje mientras el primero sigue en curso se ignora; si el trabajo falla, el id
+  // no queda marcado y un reintento lo vuelve a procesar.
+  private readonly enCurso = new Set<string>();
+
+  private enSegundoPlano(id_mensaje: string, etiqueta: string, trabajo: () => Promise<unknown>): { recibido: boolean } {
+    if (this.enCurso.has(id_mensaje)) return { recibido: true };
+    this.enCurso.add(id_mensaje);
+    void trabajo()
+      .catch((e) => this.logger.error(`${etiqueta} (${id_mensaje}) falló en segundo plano: ${e instanceof Error ? e.message : e}`))
+      .finally(() => this.enCurso.delete(id_mensaje));
+    return { recibido: true };
+  }
+
+  aceptarCotizacion(args: CrearCotizacionInputT): { recibido: boolean } {
+    return this.enSegundoPlano(args.id_mensaje, `crear_cotizacion ${args.codigo}`, () => this.recibirCotizacion(args));
+  }
+
+  aceptarReparacionTerminada(args: NotificarReparacionTerminadaInputT): { recibido: boolean } {
+    return this.enSegundoPlano(args.id_mensaje, `notificar_reparacion_terminada ${args.codigo}`, () => this.recibirReparacionTerminada(args));
+  }
+
+  // Respuesta del cliente que nos devuelve AutoMax (registrar_respuesta_cotizacion). Acuse al
+  // instante: pedir los repuestos y avisar al taller puede tardar más de los 30 s que AutoMax espera.
+  // Idempotente por id_mensaje (conc-aviso-<id>-respuesta): un reintento no repite la compra.
+  async registrarRespuestaCotizacion(a: { cotizacion_ref: string; aceptada: boolean; motivo?: string; canal?: string; id_mensaje: string }): Promise<{ recibido: boolean }> {
+    if ((await this.yaProcesado(a.id_mensaje)) || this.enCurso.has(a.id_mensaje)) return { recibido: true };
+    const filas = await this.db.query(`SELECT codigo, estado FROM cotizaciones WHERE cotizacion_ref = $1`, [a.cotizacion_ref]);
+    if (!filas[0]) throw new Error(`No existe la cotización ${a.cotizacion_ref}`);
+    if (filas[0].estado !== 'pendiente_respuesta') throw new Error(`La cotización ${a.cotizacion_ref} ya fue respondida`);
+    return this.enSegundoPlano(a.id_mensaje, `respuesta de cotización ${a.cotizacion_ref}`, async () => {
+      await this.clienteRespondioCotizacion(a.cotizacion_ref, a.aceptada, a.motivo);
+      await this.marcarProcesado(a.id_mensaje, 'registrar_respuesta_cotizacion', filas[0].codigo as string);
+    });
+  }
+
+  // Reenvía el aviso de una cotización YA guardada (p. ej. AutoMax estaba caído cuando se creó).
+  // Reconstruye el mensaje con los datos guardados y usa el mismo id_mensaje que el envío original:
+  // si AutoMax ya lo había entregado, no le llega repetido al cliente. Solo para cotizaciones pendientes.
+  async reenviarAvisoCotizacion(cotizacion_ref: string): Promise<{ reenviado: boolean; total_a_pagar: number }> {
+    const filas = await this.db.query(`SELECT * FROM cotizaciones WHERE cotizacion_ref = $1`, [cotizacion_ref]);
+    const c = filas[0];
+    if (!c) throw new Error(`No existe la cotización ${cotizacion_ref}`);
+    if (c.estado !== 'pendiente_respuesta') throw new Error(`La cotización ${cotizacion_ref} ya está ${c.estado}`);
+    const cliente = c.cliente as { cedula: string; nombre: string; telefono: string };
+    const vehiculo = c.vehiculo as { descripcion: string; placa: string };
+    const { mensaje, total: total_a_pagar } = redactarCotizacion({
+      cliente: cliente.nombre, vehiculo: vehiculo.descripcion, placa: vehiculo.placa, codigo: c.codigo as string, cotizacion_ref,
+      manoObra: c.mano_obra as LineaManoObra[], repuestos: c.repuestos as LineaRepuesto[],
+    }, this.dinero, { negrita: MENSAJES.negrita });
+    await this.telegram.enviarCotizacion({
+      id_relacion: c.id_relacion as string, cotizacion_ref, codigo: c.codigo as string, cliente, total_a_pagar, mensaje,
+    });
+    return { reenviado: true, total_a_pagar };
   }
 
   // ---------------------------------------------------------------------- crear_cotizacion ----
@@ -87,20 +147,31 @@ export class FacturacionService {
     );
     await this.marcarProcesado(args.id_mensaje, 'crear_cotizacion', args.codigo);
 
-    const total_a_pagar = total_mano_obra_cliente + total_repuestos_cliente;
+    // Lo que ve el cliente es el total CON IVA, calculado igual que el cobro por PSE (mismo
+    // DineroService), para que no acepte un valor y pague otro. Las cifras salen de este código,
+    // nunca de un modelo ni del agente que entregue el mensaje.
+    const { mensaje, total: total_a_pagar } = redactarCotizacion({
+      cliente: args.cliente.nombre, vehiculo: args.vehiculo.descripcion, placa: args.vehiculo.placa, codigo: args.codigo, cotizacion_ref,
+      manoObra: args.mano_obra,
+      repuestos: repuestosConPrecio.map((r) => ({ descripcion: r.linea.descripcion, cantidad: r.linea.cantidad, precio_unitario: r.precio_unitario, garantia: r.linea.garantia })),
+    }, this.dinero, { negrita: MENSAJES.negrita });
     await this.telegram.enviarCotizacion({
-      cotizacion_ref, codigo: args.codigo, cliente: args.cliente, total_a_pagar,
-      mensaje:
-        `Hola ${args.cliente.nombre}, tu cotización para ${args.vehiculo.descripcion} (placa ${args.vehiculo.placa}) es de ` +
-        `$${total_a_pagar.toLocaleString('es-CO')}. ${mensaje_garantia} Responde SÍ o NO.`,
+      id_relacion: args.id_relacion, cotizacion_ref, codigo: args.codigo, cliente: args.cliente, total_a_pagar, mensaje,
     });
-    this.logger.log(`Cotización ${cotizacion_ref} (orden ${args.codigo}) creada: mano de obra cliente $${total_mano_obra_cliente}, repuestos cliente $${total_repuestos_cliente}`);
+    this.logger.log(`Cotización ${cotizacion_ref} (orden ${args.codigo}) creada: mano de obra cliente $${total_mano_obra_cliente}, repuestos cliente $${total_repuestos_cliente} (sin IVA); total al cliente con IVA $${total_a_pagar}`);
     return { recibido: true };
   }
 
   private redactarMensajeGarantia(args: CrearCotizacionInputT): string {
     const cubiertas = [...args.mano_obra, ...args.repuestos].filter((l) => l.garantia.valida);
-    if (cubiertas.length === 0) return 'Ningún ítem de esta cotización quedó cubierto por garantía.';
+    if (cubiertas.length === 0) {
+      // Si el taller evaluó la garantía y no procede (p. ej. vencida), el cliente debe saber por qué
+      // paga: se muestra el motivo que dio el taller, sin inventar nada.
+      const motivos = [...new Set([...args.mano_obra, ...args.repuestos].filter((l) => l.garantia.aplica && l.garantia.motivo).map((l) => l.garantia.motivo.trim().replace(/[.\s]+$/, '').slice(0, 160)))];
+      return motivos.length
+        ? `Ningún ítem de esta cotización quedó cubierto por garantía: ${motivos.join('; ')}.`
+        : 'Ningún ítem de esta cotización quedó cubierto por garantía.';
+    }
     const quienPaga = (p: string) => ({ fabricante: 'el fabricante', tienda: 'la tienda', taller: 'el taller', cliente: 'el cliente' })[p] ?? p;
     return `Cubierto por garantía (lo paga ${[...new Set(cubiertas.map((l) => quienPaga(l.garantia.pagador)))].join(', ')}): ${cubiertas.length} ítem(s).`;
   }
@@ -220,11 +291,81 @@ export class FacturacionService {
     const cliente = c.cliente as { telefono: string; nombre: string };
     const url = await this.pse.enlacePago(referencia_pse, totales.total);
     await this.telegram.enviarPse({
-      cotizacion_ref: args.cotizacion_ref, codigo: args.codigo, cliente, referencia_pse, valor: totales.total, url_pago: url,
-      mensaje: `Hola ${cliente.nombre}, tu reparación (orden ${args.codigo}) está lista. Total a pagar: $${totales.total.toLocaleString('es-CO')}. Paga aquí: ${url}`,
+      id_relacion: c.id_relacion as string, cotizacion_ref: args.cotizacion_ref, codigo: args.codigo, cliente, referencia_pse, valor: totales.total, url_pago: url,
+      mensaje: `Hola ${cliente.nombre}, tu reparación (orden ${args.codigo}) está lista. Total a pagar: $${totales.total.toLocaleString('es-CO')} (IVA incluido). Ref. ${args.cotizacion_ref}. Usa el botón para pagar con PSE.`,
     });
     this.logger.log(`Reparación terminada, orden ${args.codigo}: PSE ${referencia_pse} por $${totales.total}`);
     return { recibido: true };
+  }
+
+  // Reenvía el aviso de pago de una reparación terminada (p. ej. para entregar el enlace nuevo de la
+  // pasarela). El id_mensaje depende del enlace: el mismo enlace no se repite, uno distinto sí sale.
+  async reenviarAvisoPago(referencia_pse: string): Promise<{ reenviado: boolean; valor: number; url_pago: string }> {
+    const filas = await this.db.query(
+      `SELECT p.referencia_pse, p.codigo, p.cotizacion_ref, p.valor, p.estado, c.id_relacion, c.cliente FROM pagos_pse p JOIN cotizaciones c ON c.cotizacion_ref = p.cotizacion_ref WHERE p.referencia_pse = $1`,
+      [referencia_pse],
+    );
+    const f = filas[0];
+    if (!f) throw new Error(`No existe el pago ${referencia_pse}`);
+    if (f.estado !== 'pendiente') throw new Error(`El pago ${referencia_pse} ya está ${f.estado}`);
+    const valor = Number(f.valor);
+    const cliente = f.cliente as { telefono: string; nombre: string };
+    const url_pago = await this.pse.enlacePago(referencia_pse, valor);
+    await this.telegram.enviarPse({
+      id_relacion: f.id_relacion as string, cotizacion_ref: f.cotizacion_ref as string, codigo: f.codigo as string, cliente, referencia_pse, valor, url_pago,
+      mensaje: `Hola ${cliente.nombre}, tu reparación (orden ${f.codigo}) está lista. Total a pagar: $${valor.toLocaleString('es-CO')} (IVA incluido). Ref. ${f.cotizacion_ref}. Usa el botón para pagar con PSE.`,
+    });
+    return { reenviado: true, valor, url_pago };
+  }
+
+  // Datos para la página de pago simulada (monto, orden, cliente y estado del pago).
+  async datosPago(referencia_pse: string): Promise<{ referencia_pse: string; codigo: string; valor: number; estado: string; cliente: string; creado_en: Date } | null> {
+    const filas = await this.db.query(
+      `SELECT p.referencia_pse, p.codigo, p.valor, p.estado, p.creado_en, c.cliente FROM pagos_pse p LEFT JOIN cotizaciones c ON c.cotizacion_ref = p.cotizacion_ref WHERE p.referencia_pse = $1`,
+      [referencia_pse],
+    );
+    const f = filas[0];
+    if (!f) return null;
+    return { referencia_pse: f.referencia_pse, codigo: f.codigo, valor: Number(f.valor), estado: f.estado, creado_en: new Date(f.creado_en), cliente: (f.cliente as { nombre?: string } | null)?.nombre ?? '' };
+  }
+
+  // Datos del comprobante: solo para pagos CONFIRMADOS. Los montos salen de las líneas que realmente
+  // se cobraron (las mismas que usó la liquidación), no de la cotización original.
+  async datosComprobante(referencia_pse: string): Promise<DatosComprobante | null> {
+    const filas = await this.db.query(
+      `SELECT p.referencia_pse, p.codigo, p.valor, p.estado, p.lineas_cobro, c.cliente, c.venta_id, v.creada_en
+       FROM pagos_pse p JOIN cotizaciones c ON c.cotizacion_ref = p.cotizacion_ref LEFT JOIN ventas v ON v.venta_id = c.venta_id
+       WHERE p.referencia_pse = $1`,
+      [referencia_pse],
+    );
+    const f = filas[0];
+    if (!f || f.estado !== 'confirmado') return null;
+    const lineas = f.lineas_cobro as LineaParaCalculo[];
+    const base = (concepto: string) => lineas.filter((l) => l.concepto === concepto).reduce((s, l) => s + l.cantidad * l.precio_unitario, 0);
+    const t = this.dinero.totales(lineas);
+    return {
+      referencia_pse: f.referencia_pse, codigo: f.codigo, cliente: (f.cliente as { nombre?: string } | null)?.nombre ?? '',
+      fecha: new Date(f.creada_en ?? Date.now()), servicios: base('servicio'), repuestos: base('repuesto'),
+      subtotal: t.subtotal, iva: t.iva, total: Number(f.valor), venta_id: (f.venta_id as string | null) ?? null,
+    };
+  }
+
+  // El cliente quiere volver a intentar un pago que rechazó: vuelve a 'pendiente' (mismo monto y
+  // referencia). Solo desde 'rechazado'; un pago confirmado nunca se reabre.
+  async reabrirPago(referencia_pse: string): Promise<boolean> {
+    const r = (await this.db.query(`UPDATE pagos_pse SET estado = 'pendiente' WHERE referencia_pse = $1 AND estado = 'rechazado' RETURNING 1`, [referencia_pse])) as unknown[];
+    const reabierto = Array.isArray(r) && (Array.isArray(r[0]) ? r[0].length > 0 : r.length > 0);
+    if (reabierto) this.logger.log(`Pago ${referencia_pse} reabierto: el cliente vuelve a intentar`);
+    return reabierto;
+  }
+
+  // El cliente rechazó/canceló el pago en la pasarela. Es definitivo, como en la pasarela del kit:
+  // para volver a intentar se necesita un enlace nuevo. No mueve dinero ni avisa a repuestos.
+  async rechazarPago(referencia_pse: string): Promise<boolean> {
+    const r = (await this.db.query(`UPDATE pagos_pse SET estado = 'rechazado' WHERE referencia_pse = $1 AND estado = 'pendiente' RETURNING 1`, [referencia_pse])) as unknown[];
+    const rechazado = Array.isArray(r) && (Array.isArray(r[0]) ? r[0].length > 0 : r.length > 0);
+    if (rechazado) this.logger.warn(`Pago ${referencia_pse} rechazado por el cliente en la pasarela`);
+    return rechazado;
   }
 
   // Simula la confirmación del pago PSE (ver POST /facturacion/sandbox/pse/:referencia_pse/confirmar).

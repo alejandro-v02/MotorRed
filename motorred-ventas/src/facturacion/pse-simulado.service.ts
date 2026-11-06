@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Injectable, Logger } from '@nestjs/common';
+import { urlPropia } from '../config.js';
 
 // SIMULADO: no hay pasarela PSE real ni simulada definida para este contrato (ver ADR 0003).
 // Genera una referencia; la confirmación se simula con
@@ -13,7 +14,7 @@ export class PseSimuladoService {
   }
 
   async enlacePago(referencia_pse: string, valor: number): Promise<string> {
-    const url = `http://localhost:3000/facturacion/sandbox/pse/${referencia_pse}/pagina`;
+    const url = `${urlPropia().replace(/\/+$/, '')}/pagos/${referencia_pse}`;
     this.logger.log(`SIMULADO PSE: referencia ${referencia_pse} por $${valor.toLocaleString('es-CO')} → ${url}`);
     return url;
   }
