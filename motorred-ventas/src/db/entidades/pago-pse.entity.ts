@@ -16,7 +16,7 @@ export class PagoPseEntity {
   @Column({ type: 'integer' })
   valor!: number;
 
-  // pendiente | confirmado
+  // pendiente | confirmado | rechazado
   @Column({ type: 'varchar', default: 'pendiente' })
   estado!: string;
 
